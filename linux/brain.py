@@ -236,6 +236,8 @@ def main():
                     ctl_ev = "talk"  # same flow as the physical talk button
                 elif ae == "listen_stop":
                     ctl_ev = "talk_up"
+                elif ae == "mode":
+                    ctl_ev = "pet_double"
                 elif ae == "command":
                     cmd = jsonlib.loads(atext)
                     link.send(cmd.get("c", ""), cmd.get("v", ""))
@@ -282,6 +284,13 @@ def main():
         ev = link.next_event(timeout=0.05) or ctl_ev
         if ev in ("dark", "light"):
             ev = None  # LDR cut from the build; ignore any stragglers
+
+        # Voice-requested mode switch (set_mode tool) — consume the flag
+        if tools_local.MODE_REQ["want"] and tools_local.MODE_REQ["want"] != mode:
+            tools_local.MODE_REQ["want"] = None
+            ev = "pet_double"
+        elif tools_local.MODE_REQ["want"]:
+            tools_local.MODE_REQ["want"] = None  # already in that mode
 
         # Brain-side double-tap detection: the firmware's blocking love-beep
         # (~400ms) eats its own 450ms double-tap window, so pet_double rarely

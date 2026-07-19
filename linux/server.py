@@ -241,6 +241,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/listen_stop":  # release of the web PTT button
             _queue.put(("control", "listen_stop", ""))
             self._json(200, {"ok": True})
+        elif path == "/mode":  # cockpit mode toggle
+            _queue.put(("control", "mode", ""))
+            self._json(200, {"ok": True})
         elif path == "/reload":  # exit; run_bittu.sh supervisor resurrects us
             self._json(200, {"ok": True, "note": "reloading, back in ~60s"})
             import threading as _t

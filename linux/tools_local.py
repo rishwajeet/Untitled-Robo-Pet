@@ -18,6 +18,7 @@ import journal
 BRIDGE = os.environ.get("BRIDGE_URL", "")  # e.g. http://<laptop-ip>:8400
 
 GUARD = {"on": False}
+MODE_REQ = {"want": None}  # "agent"/"ambient"; brain loop consumes
 _frame_source = None  # set by brain.py: callable -> jpeg bytes
 
 
@@ -97,6 +98,13 @@ def play_rps(_: str = "") -> str:
     return f"human threw {human}, I threw {robot}: {verdict}"
 
 
+def set_mode(mode: str) -> str:
+    """Voice-controlled mode switch; the brain loop applies it."""
+    want = "agent" if "agent" in str(mode).lower() else "ambient"
+    MODE_REQ["want"] = want
+    return f"switching to {want} mode"
+
+
 def set_guard(on: str) -> str:
     GUARD["on"] = str(on).lower() in ("true", "on", "yes", "1")
     journal.log("guard", f"guard mode {'ON' if GUARD['on'] else 'off'}")
@@ -146,6 +154,9 @@ def openai_tools() -> list:
               "captures on SHOOT. NEVER announce a round without calling "
               "this — talking about playing without calling it is refusing "
               "to play."),
+        _tool("set_mode", "Switch between 'agent' mode (voice relays to the "
+              "Claude Code session) and 'ambient' companion mode. Call when "
+              "asked to switch modes.", "mode"),
         _tool("set_guard", "Turn desk guard mode on/off. When on, motion at "
               "the desk triggers an alert and a photo.", "on"),
         _tool("agent_prompt", "Send a task/instruction/reply to the live "
@@ -155,7 +166,7 @@ def openai_tools() -> list:
 
 
 DISPATCH = {"weather": weather, "lookup": lookup, "current_time": current_time,
-            "play_rps": play_rps, "set_guard": set_guard,
+            "play_rps": play_rps, "set_guard": set_guard, "set_mode": set_mode,
             "agent_prompt": agent_prompt, "agent_interrupt": agent_interrupt}
 
 
