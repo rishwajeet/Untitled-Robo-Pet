@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": ["Read", "Edit", "Write", "Glob", "Grep"]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 2 -X POST http://ROBOT_IP_PLACEHOLDER:8300/event -d '{\"e\":\"agent_start\",\"text\":\"fixing your tests\"}' >/dev/null &"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 2 -X POST http://ROBOT_IP_PLACEHOLDER:8300/event -d '{\"e\":\"agent_working\",\"text\":\"claude is working\"}' >/dev/null &"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 2 -X POST http://ROBOT_IP_PLACEHOLDER:8300/event -d '{\"e\":\"agent_done\",\"text\":\"tests green!\"}' >/dev/null &"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/rishwajeetsingh/Documents/machine_house/Untitled-Robo-Pet/hooks/approve.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
