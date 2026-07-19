@@ -287,7 +287,8 @@ def _ensure_warm_mic():
             raise RuntimeError("warm mic needs ffmpeg on macOS")
         proc = subprocess.Popen(
             ["ffmpeg", "-y", "-f", "avfoundation", "-i", f":{_mic_device()}",
-             "-ar", str(_RATE), "-ac", "1", "-f", "s16le", _RAW],
+             "-ar", str(_RATE), "-ac", "1", "-flush_packets", "1",
+             "-fflags", "+flush_packets", "-f", "s16le", _RAW],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL)
     else:
