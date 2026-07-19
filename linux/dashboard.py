@@ -456,7 +456,8 @@ main#feed{padding-bottom:190px;}
     <span class="grouplbl">sys</span>
     <span class="chip danger" id="guard">GUARD</span>
     <span class="chip" id="camToggle">CAM</span>
-    <span class="chip face" id="modeToggle">MODE</span>
+    <span class="chip" id="modeAmbient">AMBIENT</span>
+    <span class="chip face" id="modeAgent">AGENT</span>
     <span class="chip" id="sleep">SLEEP</span>
     <span class="chip danger" id="reload">RELOAD</span>
   </div>
@@ -692,6 +693,9 @@ function pollStatus(){
     return r.json();
   }).then(function(s){
     setService("robot", s.runtime.robot ? "connected" : "not connected", s.runtime.robot ? "" : "bad");
+    var m = s.runtime.mode || "ambient";
+    document.getElementById("modeAmbient").classList.toggle("on", m === "ambient");
+    document.getElementById("modeAgent").classList.toggle("on", m === "agent");
     setService("camera", s.runtime.camera ? "video ready" : "not available", s.runtime.camera ? "" : "bad");
     setService("openai", s.openai ? "key loaded" : "key missing", s.openai ? "" : "bad");
     setService("audio", s.audio === "beeps" ? "beeps only" : s.audio, s.audio === "beeps" ? "warn" : "");
@@ -816,9 +820,11 @@ document.getElementById("sleep").addEventListener("click", function(){
   post("/sleep", {});
   flash("going to sleep — wake with the talk button + 'wake up'");
 });
-document.getElementById("modeToggle").addEventListener("click", function(){
-  post("/mode", {});
-  flash("mode toggling — he'll announce it");
+document.getElementById("modeAmbient").addEventListener("click", function(){
+  post("/mode_set", {mode:"ambient"});
+});
+document.getElementById("modeAgent").addEventListener("click", function(){
+  post("/mode_set", {mode:"agent"});
 });
 document.getElementById("reload").addEventListener("click", function(){
   post("/reload", {});

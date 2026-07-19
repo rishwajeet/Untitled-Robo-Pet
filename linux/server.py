@@ -244,6 +244,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/mode":  # cockpit mode toggle
             _queue.put(("control", "mode", ""))
             self._json(200, {"ok": True})
+        elif path == "/mode_set":  # explicit mode selection from the cockpit
+            _queue.put(("control", "mode_set", data.get("mode", "")))
+            self._json(200, {"ok": True})
         elif path == "/sleep":  # demo staging: sleep until woken by voice
             _queue.put(("control", "sleep", ""))
             self._json(200, {"ok": True})

@@ -191,7 +191,7 @@ def main():
     except OSError as exc:
         print(f"Dashboard unavailable on :{dashboard.PORT}: {exc}")
     link.set_observer(server.record_hardware)
-    server.update_runtime(robot=True, camera=cap.isOpened())
+    server.update_runtime(robot=True, camera=cap.isOpened(), mode="ambient")
     tools_local.set_frame_source(lambda: grab_jpeg(cap))
     server.set_frame_source(senses.get_latest_jpeg)
     link.send("reinit")  # recover the OLED if a reflash/power blip wedged it
@@ -239,6 +239,9 @@ def main():
                     ctl_ev = "talk_up"
                 elif ae == "mode":
                     ctl_ev = "pet_double"
+                elif ae == "mode_set":
+                    if atext in ("agent", "ambient") and atext != mode:
+                        ctl_ev = "pet_double"
                 elif ae == "sleep":
                     asleep = True
                     voice.record_stop()  # drop any open mic
@@ -341,6 +344,7 @@ def main():
         if ev == "pet_double":
             mode = "agent" if mode == "ambient" else "ambient"
             journal.log("system", f"mode -> {mode}")
+            server.update_runtime(mode=mode)
             if mode == "agent":
                 display.base("attentive")
                 deliver(link, "Agent mode. Speak and I relay to Claude — say 'Bittu' first to talk to me.", display)
