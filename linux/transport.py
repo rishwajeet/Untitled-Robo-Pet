@@ -225,7 +225,11 @@ class Link:
             self.observer(cmd, val)
 
     def mood(self, m):        self.send("mood", m)
-    def text(self, t):        self.send("text", t[:150])  # firmware marquees >21
+    def text(self, t):
+        # OLED caption sanitize: the firmware's hand parser stops at the first
+        # '"' inside the value, and its font renders non-ASCII as garbage.
+        clean = t.replace('"', "'").encode("ascii", "ignore").decode()
+        self.send("text", clean[:150])  # firmware marquees >21
     def beep(self, pattern):  self.send("beep", pattern)
 
     def next_event(self, timeout=0.1):
