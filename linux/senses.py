@@ -312,13 +312,17 @@ def identify_person(frame_bgr, cascade) -> dict | None:
     return {"name": name, "known": known, "times_seen": n}
 
 
+BOGUS_NAMES = {"name", "their-actual-name", "unknown", "new-human", "someone",
+               "friend", "human", "person", "stranger", "user"}
+
+
 def enroll(name: str) -> None:
     """Zero-ceremony enrollment: called when the human says their name
     mid-conversation. Uses the last face identify_person() saw -- no crop
     needs to be threaded through voice.py's tool-call plumbing."""
     name = (name or "").strip()
-    if not name:
-        return
+    if not name or name.lower() in BOGUS_NAMES or name.lower().startswith("person"):
+        return  # the model sometimes enrolls placeholder examples verbatim
     gray, jpeg = get_latest_face()
     if _has_lbph():
         if gray is not None:
