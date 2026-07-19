@@ -213,7 +213,8 @@ def main():
     current_person = None   # who's at the desk right now (refreshed ~45s)
     last_ident = 0.0
     listen_deadline = 0.0
-    last_pet_at = 0.0  # name -> last spoken-greeting ts (30 min social memory)
+    last_pet_at = 0.0
+    last_talk_start = 0.0  # name -> last spoken-greeting ts (30 min social memory)
 
     while True:
         # 0) Agent mode: Claude Code events from the HTTP server
@@ -289,6 +290,7 @@ def main():
             if now - last_pet_at < 1.5:
                 ev = "pet_double"
                 last_pet_at = 0.0
+    last_talk_start = 0.0
             else:
                 last_pet_at = now
 
@@ -347,6 +349,15 @@ def main():
 
         # 3) Hold-to-talk: button press starts the mic, release stops it.
         # (Cockpit LISTEN has no release event — auto-stops after 6s.)
+        if ev == "talk":
+            # Double-press on TALK = mode toggle (press-release-press < 1.2s).
+            # Talk starts are instant/non-blocking, so unlike the pet button
+            # nothing eats the detection window.
+            if not voice.recording() and now - last_talk_start < 1.2:
+                last_talk_start = 0.0
+                ev = "pet_double"
+            elif not voice.recording():
+                last_talk_start = now
         if ev == "talk":
             if not voice.recording():
                 display.caption("listening...")
