@@ -228,6 +228,8 @@ def main():
                         print(f"say failed: {e}")
                 elif ae == "listen":
                     ctl_ev = "talk"  # same flow as the physical talk button
+                elif ae == "listen_stop":
+                    ctl_ev = "talk_up"
                 elif ae == "command":
                     cmd = jsonlib.loads(atext)
                     link.send(cmd.get("c", ""), cmd.get("v", ""))
@@ -332,7 +334,7 @@ def main():
                 display.activity("listening")
                 try:
                     voice.record_start()
-                    listen_deadline = now + (6 if ctl_ev == "talk" else 28)
+                    listen_deadline = now + 28  # client/web release or button-up ends it sooner
                 except Exception as e:
                     print(f"record start failed: {e}")
                     display.caption("ears broke :(")

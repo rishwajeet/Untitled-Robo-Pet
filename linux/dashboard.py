@@ -658,10 +658,35 @@ document.getElementById("send").addEventListener("click", function(){
 chat.addEventListener("keydown", function(ev){
   if (ev.key === "Enter") document.getElementById("send").click();
 });
-document.getElementById("listen").addEventListener("click", function(){
-  post("/listen", {});
-  flash("listening at the robot — speak now");
-});
+(function(){
+  var btn = document.getElementById("listen");
+  var pressedAt = 0;
+  function down(ev){
+    ev.preventDefault();
+    pressedAt = Date.now();
+    btn.style.filter = "brightness(1.6)";
+    post("/listen", {});
+    flash("listening — release to send");
+  }
+  function up(ev){
+    ev.preventDefault();
+    btn.style.filter = "";
+    if (!pressedAt) return;
+    var held = Date.now() - pressedAt;
+    pressedAt = 0;
+    if (held < 400) {  // quick click: 6s window, auto-stop
+      flash("listening 6s...");
+      setTimeout(function(){ post("/listen_stop", {}); }, 6000);
+    } else {
+      post("/listen_stop", {});
+    }
+  }
+  btn.addEventListener("mousedown", down);
+  btn.addEventListener("touchstart", down);
+  btn.addEventListener("mouseup", up);
+  btn.addEventListener("mouseleave", function(e){ if (pressedAt) up(e); });
+  btn.addEventListener("touchend", up);
+})();
 document.getElementById("caption").addEventListener("click", function(){
   var t = chat.value.trim();
   if (!t) { flash("type caption text first"); return; }

@@ -238,6 +238,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/listen":    # remote push-to-talk (records at the robot)
             _queue.put(("control", "listen", ""))
             self._json(200, {"ok": True})
+        elif path == "/listen_stop":  # release of the web PTT button
+            _queue.put(("control", "listen_stop", ""))
+            self._json(200, {"ok": True})
         elif path == "/command":   # raw body control: mood/face/beep/text
             c, v = data.get("c", ""), data.get("v", "")
             if c in ("mood", "face", "beep", "text", "reinit", "ping"):
