@@ -197,6 +197,7 @@ def main():
     last_api = 0.0
     next_beat = time.time() + 45
     guard_state = {}
+    person_greeted = {}  # name -> last spoken-greeting ts (30 min social memory)
 
     while True:
         # 0) Agent mode: Claude Code events from the HTTP server
@@ -266,16 +267,25 @@ def main():
             last_seen = now
             became_present = not present
             present = True
-            # empty->present, OR a second person joins an existing scene —
-            # either is a fresh greet opportunity, same 20s rate-limit. Only
-            # advance last_count on an actual fire, so a bump that arrives
-            # mid-cooldown stays "pending" instead of being silently missed.
+            # Desk-robot social model: he LIVES with his humans. Strangers get
+            # a spoken greeting; a known person only gets one after a real
+            # absence (30 min per-person memory). Otherwise he just *notices* —
+            # happy face flick, journal line, no speech. He's a companion,
+            # not a doorbell.
             if (became_present or n > last_count) and now - last_greet > 60:
                 last_greet = now
                 last_count = n
                 frame = senses.get_latest_frame()
                 greet_face = senses.identify_person(frame, cascade) if frame is not None else None
-                ev = ev or "greet"
+                name = (greet_face or {}).get("name")
+                if greet_face and greet_face.get("known") and \
+                        now - person_greeted.get(name, 0) < 1800:
+                    journal.log("seen", f"{name} (still around — no re-greet)")
+                    link.mood("happy")  # silent acknowledgment
+                else:
+                    if name:
+                        person_greeted[name] = now
+                    ev = ev or "greet"
         elif present and now - last_seen > 6:
             present = False
             last_count = 0
