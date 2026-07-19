@@ -13,7 +13,7 @@ hot-wiring is not a bug — it needs the reset.
 
 | Part | Hookup |
 |---|---|
-| OLED 0.91" (SSD1306) | VCC→**3.3V**, GND→GND, SDA→**A4**, SCL→**A5** (I2C 0x3C) |
+| OLED 0.91" (SSD1306) | VCC→**3.3V**, GND→GND, SDA→**the pin labeled SDA**, SCL→**the pin labeled SCL** (top of the digital header, next to AREF). **NOT A4/A5** — on the UNO Q those are plain analog pins, unlike a classic Uno. (I2C 0x3C) |
 | Modulino Movement | Qwiic cable → Qwiic port. That's it. |
 | Speaker | **D9** → pot outer leg; pot **middle leg (wiper)** → speaker+; speaker− → GND. Pot = volume knob AND protects the pin. Never bypass the pot. |
 | Talk button | **D2** → one leg; other leg → GND |

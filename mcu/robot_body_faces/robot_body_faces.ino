@@ -232,6 +232,9 @@ void setup() {
   pinMode(PIN_LED_R1, OUTPUT); pinMode(PIN_LED_R2, OUTPUT);
   pinMode(PIN_LED_B1, OUTPUT); pinMode(PIN_LED_B2, OUTPUT);
   Wire.begin();
+#if WIRE_HOWMANY > 1
+  Wire1.begin();
+#endif
   // GUARD: oled.begin() returns false (rather than hanging) when no SSD1306 acks.
   oledPresent = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   if (oledPresent) {
@@ -242,14 +245,51 @@ void setup() {
   }
   Modulino.begin();
   movementPresent = movement.begin();
+
+  sendDiag("boot");
   beepPattern("happy");
   delay(1200);
 }
 
-unsigned long lastMotionPoll = 0, lastLdrPoll = 0;
+// Diagnostic: presence flags + live I2C scan. Emitted at boot and every 10s
+// so wiring changes are visible from the Mac in real time (0x3C = OLED,
+// 0x6A = Modulino LSM6DSOX). oled/movement flags latch at boot — the i2c
+// array is LIVE; if 0x3C shows here but oled:false, just press reset.
+void sendDiag(const char *tag) {
+  Serial.print("{\"e\":\""); Serial.print(tag); Serial.print("\",\"oled\":");
+  Serial.print(oledPresent ? "true" : "false");
+  Serial.print(",\"movement\":");
+  Serial.print(movementPresent ? "true" : "false");
+  Serial.print(",\"i2c\":[");
+  bool first = true;
+  for (uint8_t a = 8; a < 120; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() == 0) {
+      if (!first) Serial.print(",");
+      Serial.print("\"0x"); Serial.print(a, HEX); Serial.print("\"");
+      first = false;
+    }
+  }
+#if WIRE_HOWMANY > 1
+  Serial.print("],\"i2c1\":[");
+  first = true;
+  for (uint8_t a = 8; a < 120; a++) {
+    Wire1.beginTransmission(a);
+    if (Wire1.endTransmission() == 0) {
+      if (!first) Serial.print(",");
+      Serial.print("\"0x"); Serial.print(a, HEX); Serial.print("\"");
+      first = false;
+    }
+  }
+#endif
+  Serial.println("]}");
+}
+
+unsigned long lastMotionPoll = 0, lastLdrPoll = 0, lastDiag = 0;
 bool talkWasDown = false, petWasDown = false;
 
 void loop() {
+  if (millis() - lastDiag > 10000) { lastDiag = millis(); sendDiag("diag"); }
   // serial in
   while (Serial.available()) {
     char ch = Serial.read();
