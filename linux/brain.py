@@ -209,7 +209,14 @@ def main():
     last_api = 0.0
     next_beat = time.time() + 45
     guard_state = {}
-    person_greeted = {}
+    import json as _pj
+    _GREET_F = _os.path.expanduser("~/.bittu-greeted.json") if "_os" in dir() else "/tmp/bittu-greeted.json"
+    try:
+        import os as _os2
+        _GREET_F = _os2.path.expanduser("~/.bittu-greeted.json")
+        person_greeted = _pj.load(open(_GREET_F))
+    except Exception:
+        person_greeted = {}
     mode = "ambient"  # double-tap pet toggles "ambient" <-> "agent"
     # Persist who was last here so a reboot doesn't ask "who are you" again.
     import os as _os
@@ -403,6 +410,10 @@ def main():
                 else:
                     if name:
                         person_greeted[name] = now
+                        try:
+                            _pj.dump(person_greeted, open(_GREET_F, "w"))
+                        except Exception:
+                            pass
                     if mode == "ambient":
                         ev = ev or "greet"
         elif presence_event == "left":

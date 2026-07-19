@@ -7,7 +7,7 @@ class PresenceTracker:
     """Turn noisy face counts into meaningful social transitions."""
 
     arrive_after: float = 0.8
-    leave_after: float = 12.0
+    leave_after: float = 40.0  # tolerate detector flicker; only a real absence counts
     join_after: float = 0.8
     present: bool = False
     count: int = 0
