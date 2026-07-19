@@ -65,8 +65,8 @@ def heartbeat(link, cap):
 
 def check_guard(link, cap, state):
     """Motion at the desk while guard is on -> alert + photo + journal."""
-    ok, frame = cap.read()
-    if not ok:
+    frame = senses.get_latest_frame()
+    if frame is None:
         return
     gray = cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (21, 21), 0)
     if state.get("ref") is None:
@@ -101,24 +101,15 @@ def open_camera():
 
 
 def grab_jpeg(cap) -> bytes | None:
-    ok, frame = cap.read()
-    if not ok:
-        return None
-    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-    jpeg = buf.tobytes() if ok else None
-    senses.note_jpeg(jpeg)  # keeps the dashboard's "latest frame" fresh
-    return jpeg
+    return senses.get_latest_jpeg()  # capture thread keeps this fresh
 
 
 def count_faces(cap, cascade) -> int:
     if cascade is None:  # opencv build without CascadeClassifier -- presence
         return 0         # detection is a nice-to-have, not worth crashing over
-    ok, frame = cap.read()
-    if not ok:
+    frame = senses.get_latest_frame()
+    if frame is None:
         return 0
-    ok2, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-    if ok2:
-        senses.note_jpeg(buf.tobytes())  # keep /frame live even between events
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = cascade.detectMultiScale(gray, 1.2, 5, minSize=(60, 60))
     return len(faces)
@@ -177,6 +168,7 @@ def greet_prompt(face: dict | None) -> str:
 def main():
     link = Link()
     cap = open_camera()
+    senses.start_capture(cap)
     cascade = load_cascade()
     senses.report_identification_tier()
 
@@ -281,8 +273,8 @@ def main():
             if (became_present or n > last_count) and now - last_greet > 60:
                 last_greet = now
                 last_count = n
-                ok, frame = cap.read()
-                greet_face = senses.identify_person(frame, cascade) if ok else None
+                frame = senses.get_latest_frame()
+                greet_face = senses.identify_person(frame, cascade) if frame is not None else None
                 ev = ev or "greet"
         elif present and now - last_seen > 6:
             present = False

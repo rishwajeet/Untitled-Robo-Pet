@@ -64,6 +64,39 @@ def get_latest_face():
     return _latest_face["gray"], _latest_face["jpeg"]
 
 
+# ---------------- dedicated capture thread ----------------
+# The camera must never wait on the brain: while think()/TTS block the main
+# loop for seconds, this thread keeps reading frames so the dashboard stream
+# stays live and every consumer gets a FRESH frame, not a pre-thought relic.
+
+_latest_frame = None  # newest raw BGR frame (ndarray); capture thread owns cap
+
+
+def start_capture(cap, fps=10):
+    import threading
+
+    def _loop():
+        global _latest_frame
+        interval = 1.0 / fps
+        while True:
+            ok, frame = cap.read()
+            if ok:
+                _latest_frame = frame
+                ok2, buf = cv2.imencode(".jpg", frame,
+                                        [cv2.IMWRITE_JPEG_QUALITY, 70])
+                if ok2:
+                    note_jpeg(buf.tobytes())
+            else:
+                time.sleep(0.5)  # camera hiccup — don't spin
+            time.sleep(interval)
+
+    threading.Thread(target=_loop, daemon=True).start()
+
+
+def get_latest_frame():
+    return _latest_frame
+
+
 # ---------------- device discovery ----------------
 
 _avf_cache = None  # (video:[(idx,name)], audio:[(idx,name)]) -- one ffmpeg spawn, cached

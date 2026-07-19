@@ -312,6 +312,26 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(jpeg)
             else:
                 self._json(404, {"ok": False, "error": "no frame yet"})
+        elif path == "/stream":
+            # MJPEG push ~10fps — the dashboard's live-eyes panel
+            import time as _t
+            self.send_response(200)
+            self.send_header("Content-Type",
+                             "multipart/x-mixed-replace; boundary=bittuframe")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            try:
+                while True:
+                    jpeg = _frame_fn() if _frame_fn else None
+                    if jpeg:
+                        self.wfile.write(b"--bittuframe\r\n"
+                                         b"Content-Type: image/jpeg\r\n"
+                                         b"Content-Length: "
+                                         + str(len(jpeg)).encode() + b"\r\n\r\n"
+                                         + jpeg + b"\r\n")
+                    _t.sleep(0.1)
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # viewer closed the tab — normal
         elif self._path() == "/whatsapp-webhook":
             with _lock:
                 stats = dict(_whapi_stats)

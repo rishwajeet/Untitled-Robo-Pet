@@ -384,7 +384,7 @@ main#feed{padding-bottom:190px;}
 </main>
 <button id="resume" hidden>new entries ↓</button>
 
-<div id="cam" hidden><span class="camlbl">HIS EYES</span><img id="camimg" alt="camera"></div>
+<div id="cam"><span class="camlbl">HIS EYES</span><img id="camimg" alt="camera"></div>
 <div id="toast"></div>
 
 <div id="console">
@@ -691,13 +691,24 @@ document.getElementById("guard").addEventListener("click", function(){
 var cam = document.getElementById("cam");
 var camimg = document.getElementById("camimg");
 var camTimer = null;
+function camStart(){
+  // MJPEG stream straight from the brain (:8300) — real ~10fps; <img> is
+  // exempt from CORS so no proxy needed. Fallback to polling if it errors.
+  camimg.onerror = function(){
+    camimg.onerror = null;
+    var tick = function(){ camimg.src = "/api/frame?t=" + Date.now(); };
+    camimg.onload = function(){ if (!cam.hidden) camTimer = setTimeout(tick, 250); };
+    tick();
+  };
+  camimg.src = "http://" + location.hostname + ":8300/stream";
+}
+camStart();  // his eyes are on by default — CAM chip toggles them off
+document.getElementById("camToggle").classList.add("on");
 document.getElementById("camToggle").addEventListener("click", function(){
   cam.hidden = !cam.hidden;
   this.classList.toggle("on", !cam.hidden);
-  if (!cam.hidden) {
-    var tick = function(){ camimg.src = "/api/frame?t=" + Date.now(); };
-    tick(); camTimer = setInterval(tick, 1000);
-  } else if (camTimer) { clearInterval(camTimer); camTimer = null; }
+  if (!cam.hidden && !camTimer) camStart();
+  else if (cam.hidden && camTimer) { clearInterval(camTimer); camTimer = null; }
 });
 })();
 </script>
