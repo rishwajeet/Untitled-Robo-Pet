@@ -12,12 +12,14 @@ Then open http://<board-ip>:8302 on the laptop/phone next to the robot.
 import json
 import os
 import threading
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 import journal
 
 PORT = int(os.environ.get("DASHBOARD_PORT", 8302))
+BRAIN = os.environ.get("BRAIN_URL", "http://127.0.0.1:8300")  # server.py in brain.py
 
 _lock = threading.Lock()
 # Incremental read state: byte offset we've consumed up to, and every entry
@@ -56,10 +58,37 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silence request logging
         pass
 
+    # ---- proxy to the brain's control server (same-origin for the browser) ----
+    def _proxy(self, method, subpath, body=None):
+        req = urllib.request.Request(BRAIN + subpath, data=body, method=method,
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as r:
+                payload = r.read()
+                ctype = r.headers.get("Content-Type", "application/json")
+                self.send_response(r.status)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(payload)
+        except Exception as e:
+            self._json(502, {"ok": False, "error": f"brain unreachable: {e}"})
+
+    def do_POST(self):
+        parts = urlsplit(self.path)
+        if parts.path.startswith("/api/"):
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            self._proxy("POST", parts.path[4:], self.rfile.read(n) if n else b"{}")
+        else:
+            self._json(404, {"error": "not found"})
+
     def do_GET(self):
         parts = urlsplit(self.path)
         if parts.path == "/":
             self._html(200, PAGE)
+        elif parts.path.startswith("/api/"):
+            self._proxy("GET", parts.path[4:])
         elif parts.path == "/feed":
             qs = parse_qs(parts.query)
             try:
@@ -183,12 +212,66 @@ main#feed::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
 .placeholder .text{font-style:italic; color:var(--dimmer); text-transform:none; letter-spacing:0;}
 
 #resume{
-  position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+  position:fixed; left:50%; bottom:178px; transform:translateX(-50%);
   padding:8px 16px; border-radius:999px; border:1px solid var(--line);
   background:rgba(17,20,32,.92); color:var(--teal); font-size:12px; font-weight:700;
   letter-spacing:.03em; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.35);
 }
 #resume[hidden]{display:none;}
+
+/* ---- cockpit ---- */
+#console{
+  position:fixed; left:0; right:0; bottom:0; z-index:6;
+  background:linear-gradient(rgba(17,20,32,.96), var(--panel));
+  border-top:1px solid var(--line); backdrop-filter:blur(8px);
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+  display:flex; flex-direction:column; gap:8px;
+}
+.chatrow{display:flex; gap:8px;}
+.chatrow input{
+  flex:1; min-width:0; background:var(--bg); color:var(--ink);
+  border:1px solid var(--line); border-radius:8px; padding:10px 12px;
+  font-size:14px; outline:none;
+}
+.chatrow input:focus{border-color:var(--teal);}
+.btn{
+  border:1px solid var(--line); background:rgba(255,255,255,.05); color:var(--ink);
+  border-radius:8px; padding:9px 14px; font-size:13px; font-weight:700; cursor:pointer;
+  letter-spacing:.02em; white-space:nowrap;
+}
+.btn.primary{background:rgba(79,232,200,.15); color:var(--teal); border-color:rgba(79,232,200,.4);}
+.btn.rec{background:rgba(245,114,168,.14); color:var(--rose); border-color:rgba(245,114,168,.4);}
+.btn:active{transform:translateY(1px);}
+.chips{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; -webkit-overflow-scrolling:touch;}
+.chips::-webkit-scrollbar{display:none;}
+.chip{
+  flex:none; font-size:11px; font-weight:700; letter-spacing:.05em; cursor:pointer;
+  padding:6px 10px; border-radius:999px; border:1px solid var(--line);
+  background:rgba(255,255,255,.04); color:#aeb6c2;
+}
+.chip.mood{color:var(--teal); border-color:rgba(79,232,200,.25);}
+.chip.face{color:var(--violet); border-color:rgba(155,140,251,.3);}
+.chip.agent{color:var(--amber); border-color:rgba(242,179,68,.3);}
+.chip.danger{color:var(--red); border-color:rgba(239,87,87,.35);}
+.chip.on{background:rgba(239,87,87,.2); color:var(--red);}
+.chip:active{transform:translateY(1px);}
+.grouplbl{flex:none; align-self:center; font-size:9px; color:var(--dimmer);
+  text-transform:uppercase; letter-spacing:.14em; padding-right:2px;}
+#cam{
+  position:fixed; right:14px; bottom:186px; z-index:6; width:200px;
+  border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  box-shadow:0 10px 30px rgba(0,0,0,.5); background:var(--panel);
+}
+#cam[hidden]{display:none;}
+#cam img{display:block; width:100%;}
+#cam .camlbl{position:absolute; top:6px; left:8px; font-size:9px; font-weight:800;
+  letter-spacing:.12em; color:var(--teal); text-shadow:0 1px 3px rgba(0,0,0,.8);}
+#toast{
+  position:fixed; left:50%; bottom:186px; transform:translateX(-50%); z-index:7;
+  background:rgba(239,87,87,.95); color:#fff; font-size:12px; font-weight:700;
+  padding:8px 14px; border-radius:8px; opacity:0; transition:opacity .3s; pointer-events:none;
+}
+main#feed{padding-bottom:190px;}
 </style>
 </head>
 <body>
@@ -213,6 +296,42 @@ main#feed::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
   </div>
 </main>
 <button id="resume" hidden>new entries ↓</button>
+
+<div id="cam" hidden><span class="camlbl">HIS EYES</span><img id="camimg" alt="camera"></div>
+<div id="toast"></div>
+
+<div id="console">
+  <div class="chatrow">
+    <input id="chat" type="text" placeholder="talk to Bittu… (or press LISTEN and speak)" autocomplete="off">
+    <button class="btn primary" id="send">SEND</button>
+    <button class="btn rec" id="listen">LISTEN</button>
+  </div>
+  <div class="chips">
+    <span class="grouplbl">mood</span>
+    <span class="chip mood" data-cmd="mood:happy">HAPPY</span>
+    <span class="chip mood" data-cmd="mood:surprised">SURPRISED</span>
+    <span class="chip mood" data-cmd="mood:angry">ANGRY</span>
+    <span class="chip mood" data-cmd="mood:love">LOVE</span>
+    <span class="chip mood" data-cmd="mood:dizzy">DIZZY</span>
+    <span class="chip mood" data-cmd="mood:sleepy">SLEEPY</span>
+    <span class="chip mood" data-cmd="beep:happy">BEEP</span>
+    <span class="chip" id="caption">CAPTION↵</span>
+  </div>
+  <div class="chips">
+    <span class="grouplbl">agent</span>
+    <span class="chip face" data-cmd="face:claude_tool_running">WORKING</span>
+    <span class="chip face" data-cmd="face:claude_done">DONE</span>
+    <span class="chip face" data-cmd="face:claude_permission">PERMISSION</span>
+    <span class="chip agent" data-event="agent_start:demo task">STAGE START</span>
+    <span class="chip agent" data-event="agent_done:tests green!">STAGE DONE</span>
+    <span class="chip agent" data-event="agent_ask:ALLOW demo cmd?">STAGE ASK</span>
+    <span class="chip mood" id="ansYes">YES</span>
+    <span class="chip danger" id="ansNo">NO</span>
+    <span class="grouplbl">sys</span>
+    <span class="chip danger" id="guard">GUARD</span>
+    <span class="chip" id="camToggle">CAM</span>
+  </div>
+</div>
 <script>
 (function(){
 "use strict";
@@ -365,6 +484,73 @@ function poll(){
 }
 
 poll();
+
+/* ---- cockpit wiring ---- */
+var chat = document.getElementById("chat");
+var toast = document.getElementById("toast");
+var guardOn = false;
+
+function flash(msg){
+  toast.textContent = msg;
+  toast.style.opacity = 1;
+  setTimeout(function(){ toast.style.opacity = 0; }, 2200);
+}
+function post(path, body){
+  return fetch("/api" + path, {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(body || {})})
+    .then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+    .catch(function(e){ flash("brain unreachable — is brain.py running?"); throw e; });
+}
+
+document.getElementById("send").addEventListener("click", function(){
+  var t = chat.value.trim();
+  if (!t) return;
+  post("/say", {text: t}).then(function(){ chat.value = ""; });
+});
+chat.addEventListener("keydown", function(ev){
+  if (ev.key === "Enter") document.getElementById("send").click();
+});
+document.getElementById("listen").addEventListener("click", function(){
+  post("/listen", {});
+  flash("listening at the robot — speak now");
+});
+document.getElementById("caption").addEventListener("click", function(){
+  var t = chat.value.trim();
+  if (!t) { flash("type caption text first"); return; }
+  post("/command", {c:"text", v:t.slice(0,21)}).then(function(){ chat.value = ""; });
+});
+document.querySelectorAll(".chip[data-cmd]").forEach(function(el){
+  el.addEventListener("click", function(){
+    var p = el.getAttribute("data-cmd").split(":");
+    post("/command", {c: p[0], v: p[1]});
+  });
+});
+document.querySelectorAll(".chip[data-event]").forEach(function(el){
+  el.addEventListener("click", function(){
+    var p = el.getAttribute("data-event").split(":");
+    post(p[0] === "agent_ask" ? "/ask" : "/event",
+         p[0] === "agent_ask" ? {text: p[1]} : {e: p[0], text: p[1]});
+  });
+});
+document.getElementById("ansYes").addEventListener("click", function(){ post("/answer", {answer:"yes"}); });
+document.getElementById("ansNo").addEventListener("click", function(){ post("/answer", {answer:"no"}); });
+document.getElementById("guard").addEventListener("click", function(){
+  guardOn = !guardOn;
+  this.classList.toggle("on", guardOn);
+  post("/guard", {on: guardOn});
+});
+
+var cam = document.getElementById("cam");
+var camimg = document.getElementById("camimg");
+var camTimer = null;
+document.getElementById("camToggle").addEventListener("click", function(){
+  cam.hidden = !cam.hidden;
+  this.classList.toggle("on", !cam.hidden);
+  if (!cam.hidden) {
+    var tick = function(){ camimg.src = "/api/frame?t=" + Date.now(); };
+    tick(); camTimer = setInterval(tick, 1000);
+  } else if (camTimer) { clearInterval(camTimer); camTimer = null; }
+});
 })();
 </script>
 </body>

@@ -115,6 +115,9 @@ def count_faces(cap, cascade) -> int:
     ok, frame = cap.read()
     if not ok:
         return 0
+    ok2, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    if ok2:
+        senses.note_jpeg(buf.tobytes())  # keep /frame live even between events
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = cascade.detectMultiScale(gray, 1.2, 5, minSize=(60, 60))
     return len(faces)
@@ -179,6 +182,8 @@ def main():
     agent_events = queue.Queue()
     server.start(agent_events)
     tools_local.set_frame_source(lambda: grab_jpeg(cap))
+    server.set_frame_source(senses.get_latest_jpeg)
+    link.send("reinit")  # recover the OLED if a reflash/power blip wedged it
 
     link.mood("happy")
     link.text("BITTU ONLINE")
@@ -195,10 +200,32 @@ def main():
 
     while True:
         # 0) Agent mode: Claude Code events from the HTTP server
+        ctl_ev = None  # control-plane event that reuses the MCU-event paths below
         try:
             source, ae, atext = agent_events.get_nowait()
             journal.log(source, f"{ae}: {atext}")
-            if source == "whatsapp":
+            if source == "control":
+                # Dashboard cockpit: typed chat, remote PTT, body commands, guard
+                if ae == "say":
+                    link.mood("curious")
+                    try:
+                        reply = voice.think(atext, grab_jpeg(cap), tools=True)
+                        link.mood("happy")
+                        deliver(link, reply)
+                    except Exception as e:
+                        print(f"say failed: {e}")
+                elif ae == "listen":
+                    ctl_ev = "talk"  # same flow as the physical talk button
+                elif ae == "command":
+                    cmd = jsonlib.loads(atext)
+                    link.send(cmd.get("c", ""), cmd.get("v", ""))
+                elif ae == "guard":
+                    tools_local.set_guard(atext)
+                    link.text("guard: " + atext)
+                elif ae == "web_answer":
+                    link.mood("happy" if atext == "yes" else "angry")
+                    link.text("approved!" if atext == "yes" else "DENIED.")
+            elif source == "whatsapp":
                 link.mood("curious")
                 link.text(atext)
                 link.beep("curious")
@@ -222,7 +249,7 @@ def main():
             pass
 
         # 1) MCU events (touch, buttons) — highest priority
-        ev = link.next_event(timeout=0.05)
+        ev = link.next_event(timeout=0.05) or ctl_ev
 
         # Buttons answer a pending agent question instead of normal behavior
         if server.has_pending() and ev in ("talk", "pet"):

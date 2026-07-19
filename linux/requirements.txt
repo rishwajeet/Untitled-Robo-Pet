@@ -6,6 +6,6 @@ pyserial
 # import, not just a missing file). 4.9.0.80 is the last release that still
 # ships both. Needs numpy<2 alongside it -- newer opencv 4.x wheels are built
 # against the numpy 1.x ABI and segfault/ImportError under numpy 2.
-opencv-python-headless==4.9.0.80
+opencv-python-headless==4.10.0.84  # 4.9 breaks vs numpy2; 5.0 drops CascadeClassifier
 numpy<2
 requests

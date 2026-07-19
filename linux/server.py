@@ -28,6 +28,12 @@ _queue = None          # brain's agent queue
 _pending = {"q": None, "answer": None}
 _lock = threading.Lock()
 _whapi_stats = {"received": 0, "processed": 0, "last_event": None}
+_frame_fn = None       # set by brain: () -> latest camera jpeg bytes
+
+
+def set_frame_source(fn):
+    global _frame_fn
+    _frame_fn = fn
 
 
 def put_answer(ans: str):
@@ -155,16 +161,45 @@ class Handler(BaseHTTPRequestHandler):
         if error:
             self._json(400, {"ok": False, "error": error})
             return
-        if self._path() == "/event":
+        path = self._path()
+        if path == "/event":
             _queue.put(("agent", data.get("e", "agent_working"),
                         data.get("text", "")[:21]))
             self._json(200, {"ok": True})
-        elif self._path() == "/ask":
+        elif path == "/ask":
             with _lock:
                 _pending["q"] = data.get("text", "ALLOW?")[:21]
                 _pending["answer"] = None
             _queue.put(("agent", "agent_ask", _pending["q"]))
             self._json(200, {"ok": True})
+        # ---- dashboard control plane (all inputs work from the browser) ----
+        elif path == "/say":       # typed chat -> full think+speak flow
+            text = (data.get("text") or "").strip()
+            if text:
+                _queue.put(("control", "say", text[:500]))
+            self._json(200, {"ok": bool(text)})
+        elif path == "/listen":    # remote push-to-talk (records at the robot)
+            _queue.put(("control", "listen", ""))
+            self._json(200, {"ok": True})
+        elif path == "/command":   # raw body control: mood/face/beep/text
+            c, v = data.get("c", ""), data.get("v", "")
+            if c in ("mood", "face", "beep", "text", "reinit", "ping"):
+                _queue.put(("control", "command", json.dumps({"c": c, "v": v})))
+                self._json(200, {"ok": True})
+            else:
+                self._json(400, {"ok": False, "error": "unknown command"})
+        elif path == "/guard":
+            _queue.put(("control", "guard",
+                        "on" if data.get("on") in (True, "true", "on", 1) else "off"))
+            self._json(200, {"ok": True})
+        elif path == "/answer":    # web mirror of the physical yes/no buttons
+            ans = data.get("answer", "")
+            if ans in ("yes", "no"):
+                put_answer(ans)
+                _queue.put(("control", "web_answer", ans))
+                self._json(200, {"ok": True})
+            else:
+                self._json(400, {"ok": False})
         else:
             self._json(404, {})
 
@@ -207,7 +242,19 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/answer":
             with _lock:
                 ans = _pending["answer"]
-            self._json(200, {"answer": ans or "pending"})
+                q = _pending["q"]
+            self._json(200, {"answer": ans or "pending", "question": q})
+        elif path == "/frame":
+            jpeg = _frame_fn() if _frame_fn else None
+            if jpeg:
+                self.send_response(200)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(jpeg)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(jpeg)
+            else:
+                self._json(404, {"ok": False, "error": "no frame yet"})
         elif self._path() == "/whatsapp-webhook":
             with _lock:
                 stats = dict(_whapi_stats)
