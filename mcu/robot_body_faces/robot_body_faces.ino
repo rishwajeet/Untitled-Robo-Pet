@@ -23,6 +23,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "pet_faces.h"
+#include "pet_faces_anim.h"
 
 // ---------- pins ----------
 #define PIN_SPEAKER 9   // through the 1K pot (wiper) — pot IS the volume knob
@@ -51,6 +52,10 @@ Activity activity = ACT_NONE;
 // Set by {"c":"face","v":"claude_*"}. Takes priority over mood/speaking rendering
 // until the next {"c":"mood",...} command arrives (per spec: mood clears the override).
 const uint8_t *agentFaceBitmap = nullptr;
+// If the current agent face has an animation (pet_faces_anim.h), these cycle
+// its frames; agentFaceBitmap stays the static fallback for faces without one.
+const uint8_t **agentAnimFrames = nullptr;
+uint8_t agentAnimCount = 0;
 
 // ---------- motion state ----------
 float baseMag = 1.0;                  // gravity baseline (g)
@@ -119,8 +124,14 @@ void drawEyes() {
   // Captions and activities no longer replace the expression. A reaction briefly
   // overrides the persistent base, then the exact base expression is restored.
   const uint8_t *faceBitmap;
-  if (agentFaceBitmap != nullptr) faceBitmap = agentFaceBitmap;
-  else faceBitmap = bitmapForMood(visibleMood);
+  if (agentFaceBitmap != nullptr) {
+    // Animated agent faces cycle frames at a fixed cadence; ones without an
+    // animation keep showing their static bitmap (unchanged behavior).
+    if (agentAnimCount > 0) faceBitmap = agentAnimFrames[(now / 180) % agentAnimCount];
+    else faceBitmap = agentFaceBitmap;
+  } else {
+    faceBitmap = bitmapForMood(visibleMood);
+  }
 
   if (faceBitmap != nullptr) {
     oled.drawBitmap(0, 0, faceBitmap, PET_FACE_WIDTH, PET_FACE_HEIGHT, SSD1306_WHITE);
@@ -238,6 +249,16 @@ const uint8_t *agentFaceFromName(const String &v) {
   if (v == "claude_disconnected") return PET_FACE_CLAUDE_DISCONNECTED;
   return nullptr;
 }
+// Maps a face name to its animation frames (pet_faces_anim.h), if it has one.
+// Sets outCount to 0 (and returns nullptr) for faces with static art only.
+const uint8_t **agentAnimFromName(const String &v, uint8_t *outCount) {
+  if (v == "claude_permission") { *outCount = PET_ANIM_CLAUDE_PERMISSION_COUNT; return PET_ANIM_CLAUDE_PERMISSION_FRAMES; }
+  if (v == "claude_tool_running") { *outCount = PET_ANIM_CLAUDE_TOOL_RUNNING_COUNT; return PET_ANIM_CLAUDE_TOOL_RUNNING_FRAMES; }
+  if (v == "claude_done") { *outCount = PET_ANIM_CLAUDE_DONE_COUNT; return PET_ANIM_CLAUDE_DONE_FRAMES; }
+  if (v == "claude_needs_input") { *outCount = PET_ANIM_CLAUDE_NEEDS_INPUT_COUNT; return PET_ANIM_CLAUDE_NEEDS_INPUT_FRAMES; }
+  *outCount = 0;
+  return nullptr;
+}
 // tiny parser for {"c":"...","v":"..."} — no JSON lib needed
 void handleLine(const String &line) {
   int c1 = line.indexOf("\"c\":\""); if (c1 < 0) return;
@@ -255,15 +276,15 @@ void handleLine(const String &line) {
     Serial.print(oledPresent ? "true" : "false");
     Serial.println("}");
   }
-  else if (cmd == "base") { mood = moodFromName(val); agentFaceBitmap = nullptr; }
-  else if (cmd == "react") { setMood(moodFromName(val), 1800); agentFaceBitmap = nullptr; }
+  else if (cmd == "base") { mood = moodFromName(val); agentFaceBitmap = nullptr; agentAnimCount = 0; }
+  else if (cmd == "react") { setMood(moodFromName(val), 1800); agentFaceBitmap = nullptr; agentAnimCount = 0; }
   else if (cmd == "activity") {
     if (val == "listening") activity = ACT_LISTENING;
     else if (val == "speaking") activity = ACT_SPEAKING;
     else activity = ACT_NONE;
   }
   else if (cmd == "mood") {  // compatibility path; ack lets the Mac verify delivery
-    setMood(moodFromName(val), 6000); agentFaceBitmap = nullptr;
+    setMood(moodFromName(val), 6000); agentFaceBitmap = nullptr; agentAnimCount = 0;
     Serial.print("{\"e\":\"moodack\",\"v\":\"");
     Serial.print((int)reactionMood); Serial.println("\"}");
   }
@@ -275,7 +296,13 @@ void handleLine(const String &line) {
     textUntil = millis() + hold;
   }
   else if (cmd == "beep") beepPattern(val);
-  else if (cmd == "face") { const uint8_t *f = agentFaceFromName(val); if (f != nullptr) agentFaceBitmap = f; }
+  else if (cmd == "face") {
+    const uint8_t *f = agentFaceFromName(val);
+    if (f != nullptr) {
+      agentFaceBitmap = f;
+      agentAnimFrames = agentAnimFromName(val, &agentAnimCount);
+    }
+  }
 }
 
 void setup() {
