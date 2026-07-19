@@ -310,13 +310,17 @@ def record_stop() -> str | None:
     if not _seg["active"]:
         return None
     _seg["active"] = False
-    end = time.time()
-    a = max(0.0, _seg["start"] - _mic["t0"] - PREROLL)
-    b = max(a, end - _mic["t0"])
+    time.sleep(0.15)  # let ffmpeg flush the final packets to disk
+    # Slice from the END of the file backwards by how long the button was held
+    # (+ pre-roll). Anchoring to file length dodges ffmpeg's ~0.5s startup delay
+    # and clock skew — the tail of the file IS "now".
+    held = max(0.3, time.time() - _seg["start"])
+    want = int((held + PREROLL) * _RATE) * 2
     try:
+        sz = os.path.getsize(_RAW)
         with open(_RAW, "rb") as f:
-            f.seek(int(a * _RATE) * 2)
-            pcm = f.read(int((b - a) * _RATE) * 2)
+            f.seek(max(0, sz - want))
+            pcm = f.read()
     except OSError:
         return None
     if len(pcm) < 8000:  # <0.25s -> noise
