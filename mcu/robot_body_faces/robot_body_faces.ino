@@ -57,6 +57,7 @@ float baseMag = 1.0;                  // gravity baseline (g)
 float magHist[8] = {1, 1, 1, 1, 1, 1, 1, 1};
 int magIdx = 0;
 unsigned long lastEventAt = 0;
+unsigned long lastPetPress = 0;
 bool wasDark = false;
 
 void setMood(Mood m, unsigned long holdMs) {
@@ -359,7 +360,16 @@ void loop() {
   if (!talkDown && talkWasDown) { sendEvent("talk_up"); }  // hold-to-talk: release stops the mic
   talkWasDown = talkDown;
   bool petDown = digitalRead(PIN_BTN_PET) == LOW;
-  if (petDown && !petWasDown) { sendEvent("pet"); setMood(LOVE, 3000); beepPattern("love"); }
+  if (petDown && !petWasDown) {
+    unsigned long nowMs = millis();
+    if (nowMs - lastPetPress < 450) {
+      sendEvent("pet_double");  // double-tap = mode toggle (brain decides)
+      beepPattern("curious");
+    } else {
+      sendEvent("pet"); setMood(LOVE, 3000); beepPattern("love");
+    }
+    lastPetPress = nowMs;
+  }
   petWasDown = petDown;
 
   // motion @ 20Hz

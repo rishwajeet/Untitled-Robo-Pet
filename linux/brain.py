@@ -207,6 +207,7 @@ def main():
     next_beat = time.time() + 45
     guard_state = {}
     person_greeted = {}
+    mode = "ambient"  # double-tap pet toggles "ambient" <-> "agent"
     listen_deadline = 0.0  # name -> last spoken-greeting ts (30 min social memory)
 
     while True:
@@ -248,6 +249,8 @@ def main():
                     deliver(link, reply, display)
                 except Exception as e:
                     print(f"whatsapp announce failed: {e}")
+            elif ae in ("agent_start", "agent_working") and mode == "ambient":
+                pass  # routine agent noise stays silent in ambient mode (journaled above)
             else:
                 m, default_text = AGENT_FX.get(ae, ("curious", None))
                 link.mood(m)
@@ -269,6 +272,18 @@ def main():
 
         # 1) MCU events (touch, buttons) — highest priority
         ev = link.next_event(timeout=0.05) or ctl_ev
+
+        # Double-tap pet = mode toggle (agent <-> ambient)
+        if ev == "pet_double":
+            mode = "agent" if mode == "ambient" else "ambient"
+            journal.log("system", f"mode -> {mode}")
+            if mode == "agent":
+                display.base("attentive")
+                deliver(link, "Agent mode. Speak and I relay to Claude — say 'Bittu' first to talk to me.", display)
+            else:
+                display.base("idle")
+                deliver(link, "Ambient mode. Just us again.", display)
+            ev = None
 
         # Buttons answer a pending agent question instead of normal behavior
         if server.has_pending() and ev in ("talk", "pet"):
@@ -303,7 +318,8 @@ def main():
                 else:
                     if name:
                         person_greeted[name] = now
-                    ev = ev or "greet"
+                    if mode == "ambient":
+                        ev = ev or "greet"
         elif presence_event == "left":
             display.base("sleepy")
 
@@ -329,7 +345,13 @@ def main():
                 wav = voice.record_stop()
                 heard = voice.transcribe(wav) if wav else ""
                 print(f"HEARD: {heard}")
-                if heard:
+                if heard and mode == "agent" and not heard.lower().lstrip().startswith(("bittu", "britu", "bitu")):
+                    journal.log("heard", heard[:160])
+                    result = tools_local.agent_prompt(heard)
+                    journal.log("agent", f"relayed: {heard[:80]}")
+                    display.react("curious")
+                    deliver(link, "Sent to Claude. I'll narrate as it works.", display)
+                elif heard:
                     reply = voice.think(heard, grab_jpeg(cap), tools=True)
                     display.react("happy")
                     deliver(link, reply, display)
@@ -357,7 +379,7 @@ def main():
         # 6) Heartbeat: the aliveness engine, jittered 30-90s
         if now > next_beat:
             next_beat = now + random.uniform(30, 90)
-            if not server.has_pending():  # never over an open question
+            if not server.has_pending() and mode == "ambient":  # quiet focus in agent mode
                 heartbeat(link, cap)
 
         time.sleep(0.03)
