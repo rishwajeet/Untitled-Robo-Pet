@@ -3,10 +3,22 @@
 ## STATUS — live, updated by the orchestrator session
 
 **ARCHITECTURE DECISION (user call): the brain runs ON THE MAC, tethered.**
-C270 + mic + speakers = the MacBook's; board stays the body (faces, LEDs,
-touch, buttons) over USB serial. Best experience now; migrate to the board
-later via env vars + linux/deploy_to_board.sh if time allows. The Q-side
-paths in the code are intact — they ARE the migration.
+Best experience now; migrate to the board later via env vars if time allows.
+The Q-side code paths are intact — they ARE the migration.
+
+**PHYSICAL TOPOLOGY — one cable to the Mac, everything else ON the robot:**
+```
+MacBook ──single USB-C──> USB HUB (mounted on the robot rig)
+                            ├── UNO Q data cable  (body: faces/LEDs/touch/buttons)
+                            └── Logitech C270     (eyes + mic, aimed by the robot)
+```
+The Q's one port can't host the C270 while tethered — the HUB is mandatory
+(event provides hubs; help desk if our kit lacks one). Mac sees both devices
+directly: serial for the body, C270 for eyes/ears. Speaker: breadboard
+speaker does MCU beeps; TTS voice plays from Mac speakers beside the robot.
+UPGRADE if C6 pin answer arrives before ~3pm: Glyph C6 + speaker on the
+breadboard, TTS streamed over hotspot (audio_c6.py -> glyph_audio.ino,
+both ends already written).
 
 | Piece | State |
 |---|---|
