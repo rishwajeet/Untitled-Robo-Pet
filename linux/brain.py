@@ -240,6 +240,14 @@ def main():
                 link.mood("curious")
                 link.text(atext)
                 link.beep("curious")
+                try:  # announce sender + message out loud, in character
+                    reply = voice.think(
+                        f"A WhatsApp just arrived — '{atext}' (format is "
+                        "sender: message). Announce WHO texted and WHAT they "
+                        "said, verbatim, in one in-character line.")
+                    deliver(link, reply, display)
+                except Exception as e:
+                    print(f"whatsapp announce failed: {e}")
             else:
                 m, default_text = AGENT_FX.get(ae, ("curious", None))
                 link.mood(m)

@@ -152,7 +152,17 @@ void drawEyes() {
   if (captioning) {
     oled.fillRect(0, 20, 128, 12, SSD1306_BLACK);
     oled.setTextSize(1); oled.setTextColor(SSD1306_WHITE);
-    oled.setCursor(0, 22); oled.print(overlayText.substring(0, 21));
+    oled.setCursor(0, 22);
+    if (overlayText.length() <= 21) {
+      oled.print(overlayText);
+    } else {
+      // marquee: long captions scroll instead of being cut off
+      String track = overlayText + "   ";
+      int span = track.length();
+      int off = (int)((now / 220) % span);
+      String win = track.substring(off) + track;  // wraparound
+      oled.print(win.substring(0, 21));
+    }
   }
 
   // A restrained activity indicator preserves the emotion underneath it.
@@ -256,7 +266,13 @@ void handleLine(const String &line) {
     Serial.print("{\"e\":\"moodack\",\"v\":\"");
     Serial.print((int)reactionMood); Serial.println("\"}");
   }
-  else if (cmd == "text") { overlayText = val; textUntil = millis() + 6000; }
+  else if (cmd == "text") {
+    overlayText = val;
+    unsigned long hold = 6000;
+    if (val.length() > 21) hold = 3000 + (unsigned long)val.length() * 240;  // let scrolls finish
+    if (hold > 30000) hold = 30000;
+    textUntil = millis() + hold;
+  }
   else if (cmd == "beep") beepPattern(val);
   else if (cmd == "face") { const uint8_t *f = agentFaceFromName(val); if (f != nullptr) agentFaceBitmap = f; }
 }

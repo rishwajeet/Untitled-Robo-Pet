@@ -225,7 +225,7 @@ class Link:
             self.observer(cmd, val)
 
     def mood(self, m):        self.send("mood", m)
-    def text(self, t):        self.send("text", t[:21])
+    def text(self, t):        self.send("text", t[:150])  # firmware marquees >21
     def beep(self, pattern):  self.send("beep", pattern)
 
     def next_event(self, timeout=0.1):
