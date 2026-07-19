@@ -281,7 +281,9 @@ def record_start():
         if not shutil.which("ffmpeg"):
             raise RuntimeError("hold-to-talk needs ffmpeg on macOS")
         proc = subprocess.Popen(
-            ["ffmpeg", "-y", "-f", "avfoundation", "-i", f":{mic}",
+            ["ffmpeg", "-y", "-fflags", "nobuffer", "-flags", "low_delay",
+             "-probesize", "32", "-analyzeduration", "0",
+             "-f", "avfoundation", "-i", f":{mic}",
              "-t", "30", "-ar", "16000", "-ac", "1", path],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL)
