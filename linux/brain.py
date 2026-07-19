@@ -212,7 +212,8 @@ def main():
     mode = "ambient"  # double-tap pet toggles "ambient" <-> "agent"
     current_person = None   # who's at the desk right now (refreshed ~45s)
     last_ident = 0.0
-    listen_deadline = 0.0  # name -> last spoken-greeting ts (30 min social memory)
+    listen_deadline = 0.0
+    last_pet_at = 0.0  # name -> last spoken-greeting ts (30 min social memory)
 
     while True:
         # 0) Agent mode: Claude Code events from the HTTP server
@@ -280,6 +281,16 @@ def main():
         ev = link.next_event(timeout=0.05) or ctl_ev
         if ev in ("dark", "light"):
             ev = None  # LDR cut from the build; ignore any stragglers
+
+        # Brain-side double-tap detection: the firmware's blocking love-beep
+        # (~400ms) eats its own 450ms double-tap window, so pet_double rarely
+        # arrives from the MCU. Two pets within 1.5s count as a double here.
+        if ev == "pet":
+            if now - last_pet_at < 1.5:
+                ev = "pet_double"
+                last_pet_at = 0.0
+            else:
+                last_pet_at = now
 
         # Double-tap pet = mode toggle (agent <-> ambient)
         if ev == "pet_double":
