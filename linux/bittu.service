@@ -1,0 +1,30 @@
+# systemd unit — Bittu auto-starts on boot, survives power cycles at the
+# demo table with no laptop/ssh dance. Install ON THE UNO Q:
+#   sudo cp bittu.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now bittu
+# Logs: journalctl -u bittu -f     Stop for manual runs: sudo systemctl stop bittu
+#
+# EDIT BEFORE INSTALL: User=, WorkingDirectory=, and the Environment= lines
+# (real OPENAI_API_KEY, the serial port from recon, laptop/C6 IPs).
+
+[Unit]
+Description=Bittu desk robot brain
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=arduino
+WorkingDirectory=/home/arduino/bittu
+Environment=OPENAI_API_KEY=CHANGE_ME
+Environment=ROBOT_PORT=/dev/ttyACM0
+Environment=AUDIO_OUT=beeps
+Environment=SASS=7
+# Environment=BRIDGE_URL=http://LAPTOP_IP:8400
+# Environment=C6_IP=GLYPH_IP
+# Environment=SWIGGY_TOKEN=...
+ExecStart=/home/arduino/bittu/venv/bin/python3 brain.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
