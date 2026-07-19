@@ -191,8 +191,12 @@ def think(user_text: str, jpeg_bytes: bytes | None = None,
     FOOD_WORDS = ("restaurant", "food", "eat", "hungry", "order", "biryani",
                   "pizza", "chai", "coffee", "snack", "lunch", "dinner",
                   "menu", "deliver", "cuisine", "meal")
-    force_tool = (use_tools and swiggy_tool.available()
-                  and any(w in user_text.lower() for w in FOOD_WORDS))
+    _low = user_text.lower()
+    RPS_WORDS = ("rock paper", "rock-paper", "paper scissors", "rps",
+                 "rock, paper")
+    force_tool = use_tools and (
+        (swiggy_tool.available() and any(w in _low for w in FOOD_WORDS))
+        or any(w in _low for w in RPS_WORDS))
     first_pass = True
     for _ in range(8):  # tool loop; plain replies exit first pass
         r = client.chat.completions.create(
