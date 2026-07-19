@@ -12,9 +12,14 @@
 // Libraries needed: Adafruit_SSD1306, Adafruit_GFX, Modulino (all in Library Manager).
 
 #include <Wire.h>
+// NOTE: Modulino.h must be included before Adafruit_GFX.h/Adafruit_SSD1306.h.
+// Adafruit_SSD1306.h #defines bare macros BLACK/WHITE; Modulino.h separately
+// declares `extern ModulinoColor BLACK/WHITE`. If the SSD1306 macros are
+// defined first, the preprocessor mangles Modulino's declarations into
+// `extern ModulinoColor 0;` (syntax error). Include order avoids the collision.
+#include <Modulino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <Modulino.h>
 #include "pet_faces.h"
 
 // ---------- pins ----------
@@ -90,7 +95,11 @@ const uint8_t *bitmapForMood(Mood m) {
   }
 }
 
+bool oledPresent = false;      // set in setup(); guards all oled.* calls below
+bool movementPresent = false;  // set in setup(); guards motion detection below
+
 void drawEyes() {
+  if (!oledPresent) return;  // guard: OLED not detected at boot, skip all display I/O
   oled.clearDisplay();
   unsigned long now = millis();
   if (!blinking && now > nextBlink) { blinking = true; blinkEnd = now + 120; }
@@ -163,6 +172,7 @@ void sendEvent(const char *e) {
 // ---------- motion detection ----------
 // magnitude deviation from 1g: spike=tap, sustained=pickup, oscillating=shake
 void checkMotion() {
+  if (!movementPresent) return;  // guard: Modulino Movement not detected at boot
   movement.update();
   float x = movement.getX(), yv = movement.getY(), z = movement.getZ();
   float mag = sqrt(x * x + yv * yv + z * z);
@@ -222,13 +232,16 @@ void setup() {
   pinMode(PIN_LED_R1, OUTPUT); pinMode(PIN_LED_R2, OUTPUT);
   pinMode(PIN_LED_B1, OUTPUT); pinMode(PIN_LED_B2, OUTPUT);
   Wire.begin();
-  oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  oled.clearDisplay();
-  oled.setTextSize(2); oled.setTextColor(SSD1306_WHITE);
-  oled.setCursor(20, 8); oled.print("BITTU");  // <-- name it, change here
-  oled.display();
+  // GUARD: oled.begin() returns false (rather than hanging) when no SSD1306 acks.
+  oledPresent = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  if (oledPresent) {
+    oled.clearDisplay();
+    oled.setTextSize(2); oled.setTextColor(SSD1306_WHITE);
+    oled.setCursor(20, 8); oled.print("BITTU");  // <-- name it, change here
+    oled.display();
+  }
   Modulino.begin();
-  movement.begin();
+  movementPresent = movement.begin();
   beepPattern("happy");
   delay(1200);
 }
