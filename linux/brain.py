@@ -386,7 +386,13 @@ def main():
                 wav = voice.record_stop()
                 heard = voice.transcribe(wav) if wav else ""
                 print(f"HEARD: {heard}")
-                if heard and mode == "agent" and not heard.lower().lstrip().startswith(("bittu", "britu", "bitu")):
+                low = heard.lower() if heard else ""
+                # Mode phrases NEVER relay — intercept before routing.
+                if heard and "mode" in low and ("ambient" in low or "agent" in low):
+                    tools_local.MODE_REQ["want"] = "agent" if "agent" in low else "ambient"
+                    heard = ""
+                if heard and mode == "agent" and not low.lstrip().startswith(
+                        ("bittu", "britu", "bitu", "b2", "beetu", "bittoo", "bidu", "beto", "b-2", "bito")):
                     journal.log("heard", heard[:160])
                     result = tools_local.agent_prompt(heard)
                     journal.log("agent", f"relayed: {heard[:80]}")
