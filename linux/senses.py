@@ -482,3 +482,20 @@ class _Semantic:
             self.people[name] = entry
         self._pending_label = None
         _save_people(self.people)
+
+# ---------------- relationship memory ----------------
+def add_person_note(name: str, note: str) -> None:
+    """Append a distilled fact to a known person (rolling, max 6)."""
+    people = _load_people()
+    if name not in people:
+        return
+    notes = people[name].setdefault("notes", [])
+    notes.append(note[:120])
+    people[name]["notes"] = notes[-6:]
+    _save_people(people)
+    journal.log("memory", f"{name}: {note[:80]}")
+
+
+def person_notes(name: str) -> list:
+    people = _load_people()
+    return list(people.get(name, {}).get("notes", []))

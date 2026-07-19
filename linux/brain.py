@@ -168,10 +168,12 @@ def greet_prompt(face: dict | None) -> str:
     the existing generic observational greeting."""
     if not face or not face.get("known"):
         return EVENT_PROMPTS["greet"]
+    notes = senses.person_notes(face["name"])
+    notes_txt = ("What you remember about them: " + "; ".join(notes) + "\n") if notes else ""
     return (f"{face['name']} just walked back up to your desk — you "
-            f"recognize them (visit #{face['times_seen']} today). Greet "
-            f"them BY NAME with a callback to something you remember about "
-            f"them or a past interaction:\n{journal.recent(8)}")
+            f"recognize them (visit #{face['times_seen']} today). "
+            f"{notes_txt}Greet them BY NAME with a callback to something "
+            f"you remember about them:\n{journal.recent(8)}")
 
 
 def main():
@@ -361,11 +363,14 @@ def main():
                     display.react("curious")
                     deliver(link, "Sent to Claude. I'll narrate as it works.", display)
                 elif heard:
-                    if current_person:
-                        heard = f"({current_person} is the one speaking to you.) {heard}"
+                    speaker = current_person
+                    if speaker:
+                        heard = f"({speaker} is the one speaking to you.) {heard}"
                     reply = voice.think(heard, grab_jpeg(cap), tools=True)
                     display.react("happy")
                     deliver(link, reply, display)
+                    if speaker:
+                        voice.distill_note(speaker, heard, reply)
             except Exception as e:
                 print(f"talk failed: {e}")
                 display.caption("ears broke :(")

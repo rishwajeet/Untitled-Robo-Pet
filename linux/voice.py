@@ -322,3 +322,21 @@ def speak_cached(text: str, key: str) -> bool:
     else:
         subprocess.run(["aplay", path], capture_output=True)
     return True
+
+def distill_note(name: str, heard: str, reply: str) -> None:
+    """One cheap call: keep one fact worth remembering about this person,
+    or nothing. Fire-and-forget after a conversation."""
+    import senses
+    try:
+        r = client.chat.completions.create(
+            model="gpt-4o-mini", max_tokens=40,
+            messages=[{"role": "user", "content":
+                f"{name} said: '{heard[:200]}'. You replied: '{reply[:200]}'. "
+                "One SHORT third-person fact/vibe worth remembering about "
+                f"{name} for future chats (their interests, running jokes, "
+                "what they're building) — or the word NONE if nothing sticks."}])
+        note = r.choices[0].message.content.strip()
+        if note and note.upper() != "NONE" and len(note) > 4:
+            senses.add_person_note(name, note)
+    except Exception:
+        pass  # memory is a bonus, never a failure mode
