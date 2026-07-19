@@ -9,6 +9,7 @@ kind. Stdlib http.server only — no Flask, no external requests, safe on the
 
 Then open http://<board-ip>:8302 on the laptop/phone next to the robot.
 """
+import base64
 import json
 import os
 import threading
@@ -20,6 +21,32 @@ import journal
 
 PORT = int(os.environ.get("DASHBOARD_PORT", 8302))
 BRAIN = os.environ.get("BRAIN_URL", "http://127.0.0.1:8300")  # server.py in brain.py
+
+# ---- real OLED face art, embedded so the virtual OLED shows the exact bitmaps
+# the physical screen renders (assets/faces/generated/*.png, ~200B each, 1-bit
+# 128x32). Read once at import; a missing/renamed file just drops that key —
+# the page's JS falls back to the CSS eye mimic when a name has no entry.
+_FACE_NAMES = (
+    "idle", "blink", "happy", "surprised", "waiting", "error", "sleeping",
+    "speaking", "listening", "working",
+    "claude_permission", "claude_tool_running", "claude_done",
+    "claude_needs_input", "claude_rate_limited", "claude_disconnected",
+)
+
+
+def _load_face_uris() -> dict:
+    base = os.path.join(os.path.dirname(__file__), "..", "assets", "faces", "generated")
+    out = {}
+    for name in _FACE_NAMES:
+        try:
+            with open(os.path.join(base, name + ".png"), "rb") as f:
+                out[name] = "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
+        except OSError:
+            pass  # asset missing/renamed — JS treats an absent key as "no bitmap"
+    return out
+
+
+FACE_URIS = _load_face_uris()
 
 _lock = threading.Lock()
 # Incremental read state: byte offset we've consumed up to, and every entry
@@ -174,8 +201,12 @@ header{
   box-shadow:inset 0 0 18px rgba(0,0,0,.9);}
 .oled-screen{position:relative; height:82px; overflow:hidden; color:#b9fff2;
   background:radial-gradient(ellipse at center,rgba(79,232,200,.09),transparent 70%),#020807;
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; text-shadow:0 0 7px rgba(79,232,200,.75);
-  transform:rotate(180deg);}
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; text-shadow:0 0 7px rgba(79,232,200,.75);}
+.oled-face-wrap{height:60px; display:flex; align-items:center; justify-content:center;}
+.oled-face-img{width:100%; height:100%; object-fit:contain;
+  image-rendering:pixelated; image-rendering:crisp-edges;
+  filter:drop-shadow(0 0 2px rgba(185,255,242,.9)) drop-shadow(0 0 6px rgba(79,232,200,.6));}
+.oled-face-img[hidden]{display:none;}
 .eyes{height:52px; display:flex; align-items:center; justify-content:center; gap:45px;}
 .eye{width:27px; height:24px; border:4px solid currentColor; border-radius:50%;
   transition:all .2s ease;}
@@ -185,7 +216,12 @@ header{
 .eyes.angry .eye{height:14px; border-radius:4px; transform:skewY(-12deg);}
 .eyes.surprised .eye{width:25px; height:30px;}
 .oled-caption{text-align:center; height:22px; padding:1px 5px; overflow:hidden;
-  white-space:nowrap; text-overflow:ellipsis; font-size:12px; text-transform:uppercase;}
+  white-space:nowrap; font-size:12px; text-transform:uppercase;}
+.oled-caption span{display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis;}
+.oled-caption.marquee{text-align:left;}
+.oled-caption.marquee span{max-width:none; text-overflow:clip; padding-left:100%;
+  animation:oledscroll linear infinite;}
+@keyframes oledscroll{from{transform:translateX(0)}to{transform:translateX(-100%)}}
 .hardware-side{display:flex; flex-direction:column; justify-content:space-between; gap:12px;}
 .outputs{display:flex; align-items:flex-end; justify-content:space-around; gap:12px; min-height:64px;}
 .output{text-align:center; color:var(--dim); font-size:9px; letter-spacing:.08em; text-transform:uppercase;}
@@ -358,8 +394,11 @@ main#feed{padding-bottom:190px;}
   <div>
     <h2>Expected OLED</h2>
     <div class="oled-shell"><div class="oled-screen">
-      <div class="eyes idle" id="oledEyes" aria-label="Expected OLED face"><span class="eye"></span><span class="eye"></span></div>
-      <div class="oled-caption" id="oledText">BITTU</div>
+      <div class="oled-face-wrap">
+        <img class="oled-face-img" id="oledFaceImg" alt="" hidden>
+        <div class="eyes idle" id="oledEyes" aria-label="Expected OLED face"><span class="eye"></span><span class="eye"></span></div>
+      </div>
+      <div class="oled-caption" id="oledText"><span id="oledTextInner">BITTU</span></div>
     </div></div>
   </div>
   <div class="hardware-side">
@@ -434,6 +473,73 @@ var since = 0;
 var stick = true;
 var firstLoad = true;
 var placeholderGone = false;
+
+// ---- real OLED face art (server-embedded data URIs; empty object if assets
+// were missing at boot, in which case every lookup below misses and the CSS
+// eye mimic renders instead — same fallback path, no separate code path).
+var FACES = "__FACE_DATA_URIS__";
+var MOOD_TO_FACE = {happy:"happy", curious:"waiting", attentive:"waiting",
+  angry:"error", sleepy:"sleeping", surprised:"surprised", idle:"idle"};
+
+// idle blink: firmware blinks every ~2-5s for ~120ms (nextBlink = now + 2000
+// + now%3000). We don't have its exact phase, just its distribution, so a
+// randomized repeat is the honest equivalent rather than a fixed cadence.
+var blinkOn = false;
+function scheduleBlink(){
+  setTimeout(function(){
+    blinkOn = true; renderFace();
+    setTimeout(function(){ blinkOn = false; renderFace(); }, 120);
+    scheduleBlink();
+  }, 2000 + Math.random() * 3000);
+}
+scheduleBlink();
+
+var lastHW = {};
+function renderFace(){
+  var h = lastHW;
+  var mood = String(h.mood || "idle").toLowerCase();
+  var face = String(h.face || "");
+  var img = document.getElementById("oledFaceImg");
+  var eyes = document.getElementById("oledEyes");
+
+  // CSS-eye approximation for the rare case a bitmap is missing — same mood
+  // buckets an agent face implies, so the fallback still reads as intended.
+  var faceLabel = face.replace(/^claude_/, "").replace(/_/g, " ");
+  var cssMood = mood;
+  if (/done/.test(faceLabel)) cssMood = "love";
+  else if (/permission|needs input/.test(faceLabel)) cssMood = "surprised";
+  else if (/tool|working/.test(faceLabel)) cssMood = "curious";
+  else if (/error|disconnected|rate limited/.test(faceLabel)) cssMood = "angry";
+
+  // priority mirrors drawEyes(): agent face override > mood bitmap > love/dizzy
+  var bitmapName = null;
+  if (face && FACES[face]) {
+    bitmapName = face;
+  } else if (mood !== "love" && mood !== "dizzy") {
+    var key = mood === "attentive" ? "curious" : mood;
+    bitmapName = (key === "idle" && blinkOn && FACES.blink) ? "blink" : (MOOD_TO_FACE[key] || "idle");
+    if (!FACES[bitmapName]) bitmapName = null;
+  }
+
+  if (bitmapName) {
+    img.src = FACES[bitmapName];
+    img.hidden = false;
+    eyes.style.display = "none";
+  } else {
+    img.hidden = true;
+    eyes.style.display = "";
+    eyes.className = "eyes " + cssMood;
+  }
+}
+
+function setCaption(text){
+  var band = document.getElementById("oledText");
+  var inner = document.getElementById("oledTextInner");
+  inner.textContent = text;
+  var marquee = text.length > 21;
+  band.classList.toggle("marquee", marquee);
+  inner.style.animationDuration = marquee ? (Math.max(3, (text.length + 3) * 0.22) + "s") : "";
+}
 
 var TAG = {system:"SYSTEM", heard:"HEARD", event:"HEARD", said:"SAID",
   touch:"TOUCH", heartbeat:"THOUGHT", tool:"TOOL", agent:"AGENT", guard:"GUARD"};
@@ -558,16 +664,12 @@ function duration(total){
 
 function expectedOutputs(h){
   h = h || {};
+  lastHW = h;
   var mood = String(h.mood || "idle").toLowerCase();
-  var face = String(h.face || "").replace(/^claude_/, "").replace(/_/g, " ");
-  var visualMood = mood;
-  if (/done/.test(face)) visualMood = "love";
-  else if (/permission|needs input/.test(face)) visualMood = "surprised";
-  else if (/tool|working/.test(face)) visualMood = "curious";
-  else if (/error|disconnected|rate limited/.test(face)) visualMood = "angry";
-  document.getElementById("oledEyes").className = "eyes " + visualMood;
-  var caption = Number(h.text_until || 0) > Date.now() / 1000 ? h.text : "";
-  document.getElementById("oledText").textContent = caption || face || mood;
+  renderFace();
+  var fresh = Number(h.text_until || 0) > Date.now() / 1000;
+  var faceLabel = String(h.face || "").replace(/^claude_/, "").replace(/_/g, " ");
+  setCaption(fresh ? (h.text || "") : (faceLabel || mood));
   ["ledR1","ledR2","ledB1","ledB2"].forEach(function(id){
     document.getElementById(id).className = "led " + (id.indexOf("R") > -1 ? "red" : "blue");
   });
@@ -749,6 +851,10 @@ document.getElementById("camToggle").addEventListener("click", function(){
 </body>
 </html>
 """
+
+# Splice the real face bitmaps in as a JSON object literal — valid JS as-is,
+# no escaping needed (base64 is alphanumeric + "/+="). Done once at import.
+PAGE = PAGE.replace('"__FACE_DATA_URIS__"', json.dumps(FACE_URIS))
 
 
 def main():
