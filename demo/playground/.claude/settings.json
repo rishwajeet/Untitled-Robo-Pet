@@ -8,7 +8,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 2 -X POST http://ROBOT_IP_PLACEHOLDER:8300/event -d '{\"e\":\"agent_start\",\"text\":\"fixing your tests\"}' >/dev/null &"
+            "command": "curl -s -m 2 -X POST http://127.0.0.1:8300/event -d '{\"e\":\"agent_start\",\"text\":\"fixing your tests\"}' >/dev/null &"
           }
         ]
       }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 2 -X POST http://ROBOT_IP_PLACEHOLDER:8300/event -d '{\"e\":\"agent_working\",\"text\":\"claude is working\"}' >/dev/null &"
+            "command": "curl -s -m 2 -X POST http://127.0.0.1:8300/event -d '{\"e\":\"agent_working\",\"text\":\"claude is working\"}' >/dev/null &"
           }
         ]
       }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 2 -X POST http://ROBOT_IP_PLACEHOLDER:8300/event -d '{\"e\":\"agent_done\",\"text\":\"tests green!\"}' >/dev/null &"
+            "command": "curl -s -m 2 -X POST http://127.0.0.1:8300/event -d '{\"e\":\"agent_done\",\"text\":\"tests green!\"}' >/dev/null &"
           }
         ]
       }

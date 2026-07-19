@@ -270,7 +270,7 @@ def main():
             # either is a fresh greet opportunity, same 20s rate-limit. Only
             # advance last_count on an actual fire, so a bump that arrives
             # mid-cooldown stays "pending" instead of being silently missed.
-            if (became_present or n > last_count) and now - last_greet > 20:
+            if (became_present or n > last_count) and now - last_greet > 60:
                 last_greet = now
                 last_count = n
                 ok, frame = cap.read()

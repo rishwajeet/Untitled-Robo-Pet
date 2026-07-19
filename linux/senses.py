@@ -104,10 +104,18 @@ def find_camera():
     ACTUAL frame read -- isOpened() alone lies on the Q (its own ISP nodes
     open fine but return nothing or tiny/blank frames).
 
-    MAC (the current demo host, tethered to the board): prefer the C270 by
-    NAME via ffmpeg's avfoundation device list -- it's plugged in as the
-    robot's eyes -- falling back to the built-in FaceTime cam (index 0) when
-    it isn't attached to this machine (e.g. dev without the rig)."""
+    CAMERA_INDEX env overrides everything — field lesson (2026-07-19):
+    ffmpeg's avfoundation device order does NOT match cv2's on macOS
+    (ffmpeg said C270=3; cv2 index 3 was a Sony virtual cam's idle card).
+    """
+    forced = os.environ.get("CAMERA_INDEX")
+    if forced is not None:
+        journal.log("system", f"camera: CAMERA_INDEX override -> {forced}")
+        return int(forced)
+
+    # Mac: prefer the C270 by NAME via ffmpeg's avfoundation list; fall back
+    # to built-in (index 0). NOTE: ffmpeg's index is a HINT, not truth — see
+    # CAMERA_INDEX note above; set the env when they disagree.
     if platform.system() == "Darwin":
         video, _ = _avfoundation_devices()
         for idx, name in video:

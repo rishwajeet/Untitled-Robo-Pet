@@ -219,7 +219,15 @@ void handleLine(const String &line) {
   int v1 = line.indexOf("\"v\":\"");
   if (v1 >= 0) { int v2 = line.indexOf('"', v1 + 5); val = line.substring(v1 + 5, v2); }
 
-  if (cmd == "mood") { setMood(moodFromName(val), 6000); agentFaceBitmap = nullptr; }  // serial "mood" clears the agent-face override, per spec
+  if (cmd == "ping") { Serial.println("{\"e\":\"pong\"}"); }  // downlink liveness ack
+  else if (cmd == "reinit") {  // recover a wedged/uninitialized panel without a power cycle
+    oledPresent = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+    if (oledPresent) { oled.clearDisplay(); oled.display(); }
+    Serial.print("{\"e\":\"reinit\",\"oled\":");
+    Serial.print(oledPresent ? "true" : "false");
+    Serial.println("}");
+  }
+  else if (cmd == "mood") { setMood(moodFromName(val), 6000); agentFaceBitmap = nullptr; }  // serial "mood" clears the agent-face override, per spec
   else if (cmd == "text") { overlayText = val; textUntil = millis() + 6000; }
   else if (cmd == "beep") beepPattern(val);
   else if (cmd == "face") { const uint8_t *f = agentFaceFromName(val); if (f != nullptr) agentFaceBitmap = f; }

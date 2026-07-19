@@ -112,12 +112,14 @@ again.
 Judge approaches. Let Bittu greet them off the camera (he comments on
 something he sees). Then, in order:
 
-- "Pick him up." → protest animation.
-- "Now shake him." → dizzy meltdown.
-- Pet or tap → forgives, hearts.
+- Press the pet button → affection, hearts, he asks for more.
 - Hold the talk button, ask him anything → sassy answer referencing what
-  he sees.
-- Optional if time allows: rock-paper-scissors against the camera.
+  he sees. (If the judge visited before, he greets them BY NAME — stage
+  this by introducing them on their first pass.)
+- Rock-paper-scissors against the camera — judge plays, he gloats/sulks.
+- Optional: "guard my desk" → judge waves a hand → INTRUDER alert, red
+  lights, he snaps their photo. (No pickup/shake beats — motion sensor
+  was cut from the build.)
 
 Keep this to about 60-75 seconds. Watch the judge's energy — if they're
 already reaching for their phone to check the time, cut straight to the
