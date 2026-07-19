@@ -247,7 +247,11 @@ def main():
             journal.log(source, f"{ae}: {atext}")
             if source == "control":
                 # Dashboard cockpit: typed chat, remote PTT, body commands, guard
-                if ae == "say":
+                if ae == "announce":
+                    display.react("happy")
+                    deliver(link, atext, display)  # verbatim, no think()
+                    journal.log("said", atext[:160])
+                elif ae == "say":
                     link.mood("curious")
                     try:
                         reply = voice.think(atext, grab_jpeg(cap), tools=True)

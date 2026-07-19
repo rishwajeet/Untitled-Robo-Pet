@@ -230,6 +230,11 @@ class Handler(BaseHTTPRequestHandler):
             _queue.put(("agent", "agent_ask", _pending["q"]))
             self._json(200, {"ok": True})
         # ---- dashboard control plane (all inputs work from the browser) ----
+        elif path == "/announce":  # speak EXACT text, no personality filter
+            text = (data.get("text") or "").strip()
+            if text:
+                _queue.put(("control", "announce", text[:600]))
+            self._json(200, {"ok": bool(text)})
         elif path == "/say":       # typed chat -> full think+speak flow
             text = (data.get("text") or "").strip()
             if text:
