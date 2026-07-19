@@ -34,6 +34,7 @@ _started_at = time.time()
 _runtime = {"camera": False, "robot": False}
 _hardware = {
     "mood": "idle", "text": "", "face": "", "beep": "",
+    "activity": "clear",
     "text_until": 0, "beep_until": 0,
     "last_action": "waiting for robot", "updated_at": 0,
 }
@@ -59,7 +60,8 @@ def record_hardware(kind: str, value: str):
         else:
             _hardware[kind] = value
             _hardware["last_action"] = f"{kind} · {value}"
-            if kind == "mood":
+            if kind in ("mood", "base", "react"):
+                _hardware["mood"] = value
                 _hardware["face"] = ""
             elif kind == "text":
                 _hardware["text_until"] = time.time() + 6

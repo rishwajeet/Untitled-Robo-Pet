@@ -7,7 +7,9 @@
 // Owns: OLED eyes, mood LEDs, beep voice, Modulino movement events, buttons.
 // Talks to the Linux brain over Serial as newline JSON.
 //   up:   {"e":"pickup"} {"e":"shake"} {"e":"tap"} {"e":"talk"} {"e":"pet"} {"e":"dark"} {"e":"light"}
-//   down: {"c":"mood","v":"happy"}  {"c":"text","v":"HELLO"}  {"c":"beep","v":"happy"}  {"c":"face","v":"claude_permission"}
+//   down: {"c":"base","v":"attentive"} {"c":"react","v":"happy"}
+//         {"c":"activity","v":"speaking"} {"c":"text","v":"HELLO"}
+// Legacy mood/face/beep commands remain supported.
 //
 // Libraries needed: Adafruit_SSD1306, Adafruit_GFX, Modulino (all in Library Manager).
 
@@ -37,10 +39,13 @@ ModulinoMovement movement;
 
 // ---------- mood ----------
 enum Mood { IDLE, HAPPY, CURIOUS, ANGRY, DIZZY, SLEEPY, SURPRISED, LOVE };
-Mood mood = IDLE;
-unsigned long moodUntil = 0;          // auto-decay back to IDLE
+Mood mood = IDLE;                     // persistent base expression
+Mood reactionMood = IDLE;             // short expression, then restore mood
+unsigned long reactionUntil = 0;
 String overlayText = "";
 unsigned long textUntil = 0;
+enum Activity { ACT_NONE, ACT_LISTENING, ACT_SPEAKING };
+Activity activity = ACT_NONE;
 
 // ---------- agent face override ----------
 // Set by {"c":"face","v":"claude_*"}. Takes priority over mood/speaking rendering
@@ -55,8 +60,8 @@ unsigned long lastEventAt = 0;
 bool wasDark = false;
 
 void setMood(Mood m, unsigned long holdMs) {
-  mood = m;
-  moodUntil = millis() + holdMs;
+  reactionMood = m;
+  reactionUntil = millis() + holdMs;
 }
 
 // ---------- beeps (R2-D2 voice) ----------
@@ -107,19 +112,21 @@ void drawEyes() {
 
   bool captioning = overlayText.length() && now < textUntil;
   if (!captioning) overlayText = "";  // same expiry-clear behavior as the original
+  bool reacting = reactionUntil != 0 && now < reactionUntil;
+  Mood visibleMood = reacting ? reactionMood : mood;
 
-  // Priority: agent-face override > "speaking" (while captioning) > mood bitmap > procedural.
+  // Captions and activities no longer replace the expression. A reaction briefly
+  // overrides the persistent base, then the exact base expression is restored.
   const uint8_t *faceBitmap;
   if (agentFaceBitmap != nullptr) faceBitmap = agentFaceBitmap;
-  else if (captioning) faceBitmap = PET_FACE_SPEAKING;
-  else faceBitmap = bitmapForMood(mood);
+  else faceBitmap = bitmapForMood(visibleMood);
 
   if (faceBitmap != nullptr) {
     oled.drawBitmap(0, 0, faceBitmap, PET_FACE_WIDTH, PET_FACE_HEIGHT, SSD1306_WHITE);
   } else {
     // Procedural fallback for DIZZY / LOVE — unchanged geometry from robot_body.ino.
     int lx = 30, rx = 82, y = 4, w = 16, h = 24;
-    if (mood == LOVE) {  // upper arcs + heart pupils
+    if (visibleMood == LOVE) {  // upper arcs + heart pupils
       oled.fillRoundRect(lx, y + h / 2, w, h / 2, 4, SSD1306_WHITE);
       oled.fillRoundRect(rx, y + h / 2, w, h / 2, 4, SSD1306_WHITE);
       oled.fillCircle(lx + w / 2, y + h / 2, w / 2, SSD1306_WHITE);
@@ -146,6 +153,15 @@ void drawEyes() {
     oled.fillRect(0, 20, 128, 12, SSD1306_BLACK);
     oled.setTextSize(1); oled.setTextColor(SSD1306_WHITE);
     oled.setCursor(0, 22); oled.print(overlayText.substring(0, 21));
+  }
+
+  // A restrained activity indicator preserves the emotion underneath it.
+  if (activity == ACT_LISTENING) {
+    int pulse = 1 + ((now / 300) % 2);
+    oled.fillCircle(119, 4, pulse, SSD1306_WHITE);
+  } else if (activity == ACT_SPEAKING) {
+    int width = 2 + ((now / 140) % 3) * 2;
+    oled.fillRect(124 - width, 2, width, 3, SSD1306_WHITE);
   }
   oled.display();
 }
@@ -195,6 +211,7 @@ void checkMotion() {
 String rx;
 Mood moodFromName(const String &v) {
   if (v == "happy") return HAPPY; if (v == "curious") return CURIOUS;
+  if (v == "attentive") return CURIOUS;
   if (v == "angry") return ANGRY; if (v == "dizzy") return DIZZY;
   if (v == "sleepy") return SLEEPY; if (v == "surprised") return SURPRISED;
   if (v == "love") return LOVE; return IDLE;
@@ -227,7 +244,14 @@ void handleLine(const String &line) {
     Serial.print(oledPresent ? "true" : "false");
     Serial.println("}");
   }
-  else if (cmd == "mood") { setMood(moodFromName(val), 6000); agentFaceBitmap = nullptr; }  // serial "mood" clears the agent-face override, per spec
+  else if (cmd == "base") { mood = moodFromName(val); agentFaceBitmap = nullptr; }
+  else if (cmd == "react") { setMood(moodFromName(val), 1800); agentFaceBitmap = nullptr; }
+  else if (cmd == "activity") {
+    if (val == "listening") activity = ACT_LISTENING;
+    else if (val == "speaking") activity = ACT_SPEAKING;
+    else activity = ACT_NONE;
+  }
+  else if (cmd == "mood") { setMood(moodFromName(val), 6000); agentFaceBitmap = nullptr; }  // compatibility
   else if (cmd == "text") { overlayText = val; textUntil = millis() + 6000; }
   else if (cmd == "beep") beepPattern(val);
   else if (cmd == "face") { const uint8_t *f = agentFaceFromName(val); if (f != nullptr) agentFaceBitmap = f; }
@@ -328,7 +352,7 @@ void loop() {
     wasDark = dark;
   }
 
-  if (millis() > moodUntil && mood != IDLE) mood = IDLE;
+  if (reactionUntil != 0 && millis() > reactionUntil) reactionUntil = 0;
   drawEyes();
   driveLeds();
   delay(20);

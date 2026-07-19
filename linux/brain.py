@@ -20,6 +20,7 @@ import dashboard
 import server
 import tools_local
 import voice
+from emotions import EmotionDirector, PresenceTracker
 from transport import Link
 
 HEARTBEAT_PROMPT = """You are Bittu's inner voice. Here is your recent life:
@@ -131,10 +132,18 @@ def load_cascade():
         return None
 
 
-def deliver(link, reply: str):
+def deliver(link, reply: str, display=None):
     """Speak if we can; always show on OLED; beep either way."""
-    link.text(reply)
-    spoke = voice.speak(reply)
+    if display:
+        display.caption(reply)
+        display.activity("speaking")
+    else:
+        link.text(reply)
+    try:
+        spoke = voice.speak(reply)
+    finally:
+        if display:
+            display.activity(None)
     if not spoke:
         link.beep("curious")  # beep-voice mode: sound + text = the reply
     print(f"BITTU: {reply}")
@@ -167,6 +176,7 @@ def greet_prompt(face: dict | None) -> str:
 
 def main():
     link = Link()
+    display = EmotionDirector(link)
     cap = open_camera()
     senses.start_capture(cap)
     cascade = load_cascade()
@@ -184,16 +194,15 @@ def main():
     server.set_frame_source(senses.get_latest_jpeg)
     link.send("reinit")  # recover the OLED if a reflash/power blip wedged it
 
-    link.mood("happy")
-    link.text("BITTU ONLINE")
+    display.base("idle")
+    display.react("happy")
+    display.caption("BITTU ONLINE")
     journal.log("system", "Bittu online")
     print("Bittu online. Ctrl-C to stop.")
     print(f"Dashboard: http://localhost:{dashboard.PORT}")
 
-    present = False
-    last_seen = 0.0
+    presence = PresenceTracker()
     last_greet = 0.0
-    last_count = 0
     last_api = 0.0
     next_beat = time.time() + 45
     guard_state = {}
@@ -263,61 +272,61 @@ def main():
         now = time.time()
         greet_face = None
         n = count_faces(cap, cascade)
-        if n > 0:
-            last_seen = now
-            became_present = not present
-            present = True
+        presence_event = presence.update(n, now)
+        if presence.present:
+            if presence_event in ("arrived", "joined"):
+                display.base("attentive")
+                display.react("curious")
             # Desk-robot social model: he LIVES with his humans. Strangers get
             # a spoken greeting; a known person only gets one after a real
             # absence (30 min per-person memory). Otherwise he just *notices* —
             # happy face flick, journal line, no speech. He's a companion,
             # not a doorbell.
-            if (became_present or n > last_count) and now - last_greet > 60:
+            if presence_event in ("arrived", "joined") and now - last_greet > 60:
                 last_greet = now
-                last_count = n
                 frame = senses.get_latest_frame()
                 greet_face = senses.identify_person(frame, cascade) if frame is not None else None
                 name = (greet_face or {}).get("name")
                 if greet_face and greet_face.get("known") and \
                         now - person_greeted.get(name, 0) < 1800:
                     journal.log("seen", f"{name} (still around — no re-greet)")
-                    link.mood("happy")  # silent acknowledgment
+                    display.react("happy")  # silent acknowledgment
                 else:
                     if name:
                         person_greeted[name] = now
                     ev = ev or "greet"
-        elif present and now - last_seen > 6:
-            present = False
-            last_count = 0
-            link.mood("sleepy")
-            link.text("lonely...")
+        elif presence_event == "left":
+            display.base("sleepy")
 
         # 3) Push-to-talk: record -> STT -> reply grounded in what it sees
         if ev == "talk":
-            link.text("listening...")
-            link.mood("curious")
+            display.caption("listening...")
+            display.base("attentive")
+            display.activity("listening")
             try:
                 wav = voice.record(4)
                 heard = voice.transcribe(wav)
                 print(f"HEARD: {heard}")
                 if heard:
                     reply = voice.think(heard, grab_jpeg(cap), tools=True)
-                    link.mood("happy")
-                    deliver(link, reply)
+                    display.react("happy")
+                    deliver(link, reply, display)
             except Exception as e:
                 print(f"talk failed: {e}")
-                link.text("ears broke :(")
+                display.caption("ears broke :(")
+            finally:
+                display.activity(None)
             continue
 
         # 4) Physical events -> witty reaction (rate-limited to stay snappy)
         if ev in EVENT_PROMPTS and now - last_api > 5:
             last_api = now
             journal.log("touch", ev)
-            link.mood(EVENT_MOODS[ev])
+            display.react(EVENT_MOODS[ev])
             try:
                 prompt = greet_prompt(greet_face) if ev == "greet" else EVENT_PROMPTS[ev]
                 reply = voice.think(prompt, grab_jpeg(cap))
-                deliver(link, reply)
+                deliver(link, reply, display)
             except Exception as e:
                 print(f"api failed: {e}")  # MCU already reacted locally — fine
 
