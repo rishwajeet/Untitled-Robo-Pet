@@ -241,6 +241,10 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/listen_stop":  # release of the web PTT button
             _queue.put(("control", "listen_stop", ""))
             self._json(200, {"ok": True})
+        elif path == "/reload":  # exit; run_bittu.sh supervisor resurrects us
+            self._json(200, {"ok": True, "note": "reloading, back in ~60s"})
+            import threading as _t
+            _t.Timer(0.5, lambda: os._exit(0)).start()
         elif path == "/command":   # raw body control: mood/face/beep/text
             c, v = data.get("c", ""), data.get("v", "")
             if c in ("mood", "face", "beep", "text", "reinit", "ping"):

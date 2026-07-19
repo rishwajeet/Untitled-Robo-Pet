@@ -417,6 +417,7 @@ main#feed{padding-bottom:190px;}
     <span class="grouplbl">sys</span>
     <span class="chip danger" id="guard">GUARD</span>
     <span class="chip" id="camToggle">CAM</span>
+    <span class="chip danger" id="reload">RELOAD</span>
   </div>
 </div>
 <script>
@@ -707,6 +708,10 @@ document.querySelectorAll(".chip[data-event]").forEach(function(el){
 });
 document.getElementById("ansYes").addEventListener("click", function(){ post("/answer", {answer:"yes"}); });
 document.getElementById("ansNo").addEventListener("click", function(){ post("/answer", {answer:"no"}); });
+document.getElementById("reload").addEventListener("click", function(){
+  post("/reload", {});
+  flash("brain reloading — back in about a minute");
+});
 document.getElementById("guard").addEventListener("click", function(){
   guardOn = !guardOn;
   this.classList.toggle("on", guardOn);
