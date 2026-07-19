@@ -16,6 +16,8 @@ void setup() {
   if (!display.begin(SSD1306_SWITCHCAPVCC, kOledAddress)) {
     while (true) delay(1000);
   }
+  // Match the OLED's inverted physical mounting for every demo renderer.
+  display.setRotation(2);
 
   face.begin(PET_ANIMATION_IDLE_BLINK, millis());
 }

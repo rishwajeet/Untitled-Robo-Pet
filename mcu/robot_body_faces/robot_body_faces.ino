@@ -246,6 +246,9 @@ void setup() {
   // GUARD: oled.begin() returns false (rather than hanging) when no SSD1306 acks.
   oledPresent = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   if (oledPresent) {
+    // The OLED is mounted inverted on the robot. Rotate the display globally so
+    // every bitmap, procedural face, caption, and boot screen uses one orientation.
+    oled.setRotation(2);
     oled.clearDisplay();
     oled.setTextSize(2); oled.setTextColor(SSD1306_WHITE);
     oled.setCursor(20, 8); oled.print("BITTU");  // <-- name it, change here

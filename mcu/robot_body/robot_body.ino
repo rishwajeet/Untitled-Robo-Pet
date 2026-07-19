@@ -211,6 +211,8 @@ void setup() {
   // can never leave the eyes/text code touching a half-initialized driver.
   oledPresent = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   if (oledPresent) {
+    // The OLED is mounted inverted on the robot. Rotate all drawing paths 180°.
+    oled.setRotation(2);
     oled.clearDisplay();
     oled.setTextSize(2); oled.setTextColor(SSD1306_WHITE);
     oled.setCursor(20, 8); oled.print("BITTU");  // <-- name it, change here
