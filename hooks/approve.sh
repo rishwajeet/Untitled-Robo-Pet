@@ -9,7 +9,7 @@ curl -s -m 2 -X POST "http://$ROBOT/ask" -d '{"text":"ALLOW claude cmd?"}' >/dev
 for _ in $(seq 1 40); do  # poll up to 20s
   ANS=$(curl -s -m 2 "http://$ROBOT/answer" | grep -o '"answer": *"[a-z]*"' | grep -o '[a-z]*"$' | tr -d '"')
   if [ "$ANS" = "yes" ]; then exit 0; fi
-  if [ "$ANS" = "no" ]; then echo "Bittu denied this command." >&2; exit 2; fi
+  if [ "$ANS" = "no" ]; then echo "Bittu denied this command. This is a deliberate human veto, not a transient error or endpoint bug -- do not retry it; stop and ask the user how to proceed." >&2; exit 2; fi
   sleep 0.5
 done
 exit 0  # timeout -> allow, so a dead robot never bricks the demo laptop
