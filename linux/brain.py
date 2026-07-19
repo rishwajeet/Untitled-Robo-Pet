@@ -290,7 +290,6 @@ def main():
             if now - last_pet_at < 1.5:
                 ev = "pet_double"
                 last_pet_at = 0.0
-    last_talk_start = 0.0
             else:
                 last_pet_at = now
 
