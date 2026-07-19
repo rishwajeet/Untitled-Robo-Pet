@@ -80,23 +80,88 @@ def volume(direction: str) -> str:
     return "I can turn volume up, down, mute, or unmute."
 
 
+
+def web_search(query: str) -> str:
+    """Open a web search — the search-and-open the whitelist was missing."""
+    import urllib.parse
+    q = urllib.parse.quote((query or "").strip())
+    if not q:
+        return "search for what?"
+    journal.log("pc", f"search {query[:60]}")
+    return _osa(f'open location "https://www.google.com/search?q={q}"')
+
+
+def youtube_search(query: str) -> str:
+    import urllib.parse
+    q = urllib.parse.quote((query or "").strip())
+    journal.log("pc", f"youtube {query[:60]}")
+    return _osa(f'open location "https://www.youtube.com/results?search_query={q}"')
+
+
+def see_screen(_: str = "") -> str:
+    """Screenshot the Mac and read it with vision — he SEES the screen,
+    not just the camera. Safe: pure perception, no actuation."""
+    import base64
+    import tempfile
+    from openai import OpenAI
+    path = tempfile.mktemp(suffix=".png")
+    try:
+        subprocess.run(["screencapture", "-x", "-t", "png", path],
+                       check=True, timeout=6)
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        journal.log("pc", "screenshot -> vision")
+        r = OpenAI().chat.completions.create(
+            model="gpt-4o-mini", max_tokens=120,
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text": "This is the human's computer screen. "
+                 "Describe what's on it / what they're doing, briefly."},
+                {"type": "image_url", "image_url": {
+                    "url": f"data:image/png;base64,{b64}", "detail": "low"}}]}])
+        return r.choices[0].message.content.strip()
+    except Exception as e:
+        return f"couldn't see the screen: {e}"
+
+
+def type_text(text: str) -> str:
+    """Type text into the frontmost app. Real actuation — on the human's own
+    machine. (For anything destructive, gate behind the physical button.)"""
+    if not text:
+        return "type what?"
+    journal.log("pc", f"type: {text[:40]}")
+    if shutil.which("cliclick"):
+        try:
+            subprocess.run(["cliclick", f"t:{text}"], check=True, timeout=6)
+            return "typed"
+        except Exception as e:
+            return f"type failed: {e}"
+    safe = text.replace('"', "'")
+    return _osa(f'tell application "System Events" to keystroke "{safe}"')
+
+
 # tool defs for the openai loop
 def openai_tools() -> list:
-    def t(name, desc, param):
+    def t(name, desc, param=None):
+        props = {param: {"type": "string"}} if param else {}
         return {"type": "function", "function": {
             "name": name, "description": desc,
-            "parameters": {"type": "object",
-                           "properties": {param: {"type": "string"}},
-                           "required": [param]}}}
+            "parameters": {"type": "object", "properties": props,
+                           "required": [param] if param else []}}}
     return [
         t("open_app", "Open an app or site on the human's Mac. Safe list only: "
           + ", ".join(sorted(APPS)) + ".", "name"),
         t("media", "Control media playback on the Mac: play, pause, next, previous.", "action"),
         t("volume", "Change the Mac's volume: up, down, mute, unmute.", "direction"),
+        t("web_search", "Search Google and open the results for a query.", "query"),
+        t("youtube_search", "Search YouTube and open the results for a query.", "query"),
+        t("see_screen", "Look at / read what is currently on the human's computer screen."),
+        t("type_text", "Type text into whatever app is focused on the Mac.", "text"),
     ]
 
 
-DISPATCH = {"open_app": open_app, "media": media, "volume": volume}
+DISPATCH = {"open_app": open_app, "media": media, "volume": volume,
+            "web_search": web_search, "youtube_search": youtube_search,
+            "see_screen": see_screen, "type_text": type_text}
 
 
 def call(name: str, arguments: dict) -> str:
