@@ -35,6 +35,8 @@ class PresenceTracker:
                 if detected != self._candidate_count:
                     self._candidate_count = detected
                     self._candidate_since = now
+                elif self._candidate_since is None:  # flicker path: count matched
+                    self._candidate_since = now      # but timer never started
                 elif now - self._candidate_since + 1e-9 >= self.join_after:
                     self.count = detected
                     self._candidate_since = None
