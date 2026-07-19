@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bittu — Build Retrospective</title>
+<style>
+  :root{
+    --bg:#0b0c10; --panel:#12141c; --ink:#e9ecf1; --dim:#8b94a3; --dimmer:#586072;
+    --line:#20242f; --teal:#4fe8c8; --violet:#9b8cfb; --amber:#f2b344;
+    --rose:#f572a8; --red:#ef5757; --green:#57d98a;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; color:var(--ink);
+    background:radial-gradient(ellipse at 50% -8%, rgba(79,232,200,.06), transparent 55%), var(--bg);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:820px; margin:0 auto; padding:64px 22px 120px;}
+  header.hero{border-bottom:1px solid var(--line); padding-bottom:34px; margin-bottom:44px;}
+  .eyebrow{font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--teal); margin:0 0 14px;}
+  h1{font-size:clamp(34px,7vw,56px); line-height:1.02; margin:0 0 16px; letter-spacing:-.02em; font-weight:800;}
+  .sub{font-size:18px; color:var(--dim); margin:0; max-width:60ch;}
+  .meta{display:flex; flex-wrap:wrap; gap:10px; margin-top:26px;}
+  .chip{font-size:12px; font-weight:600; letter-spacing:.03em; padding:5px 11px; border-radius:999px;
+    border:1px solid var(--line); background:rgba(255,255,255,.03); color:var(--dim);}
+  h2{font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim);
+    margin:60px 0 20px; padding-bottom:10px; border-bottom:1px solid var(--line); font-weight:700;}
+  h3{font-size:19px; margin:32px 0 8px; letter-spacing:-.01em;}
+  p{margin:0 0 16px;}
+  a{color:var(--teal); text-decoration:none;}
+  strong{color:#fff;}
+  .lede{font-size:18px; color:#c8cdd6;}
+  ul{margin:0 0 18px; padding-left:0; list-style:none;}
+  li{position:relative; padding-left:24px; margin-bottom:11px;}
+  li::before{content:""; position:absolute; left:2px; top:10px; width:7px; height:7px; border-radius:2px;
+    background:var(--teal); opacity:.75;}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:20px 0;}
+  @media(max-width:640px){.grid{grid-template-columns:1fr;}}
+  .card{border:1px solid var(--line); border-radius:12px; padding:16px 18px; background:var(--panel);}
+  .card h4{margin:0 0 6px; font-size:15px; color:#fff;}
+  .card p{margin:0; font-size:14px; color:var(--dim);}
+  .war{border-left:2px solid var(--amber); padding:4px 0 4px 20px; margin:22px 0;}
+  .war .root{color:var(--amber); font-weight:700; font-size:13px; letter-spacing:.04em; text-transform:uppercase;}
+  .war h3{margin:6px 0 6px; font-size:17px;}
+  .war .lesson{color:#c8cdd6; font-size:14.5px;}
+  .lesson-tag{color:var(--teal); font-weight:700;}
+  blockquote{margin:20px 0; padding:14px 20px; border-left:3px solid var(--violet);
+    background:rgba(155,140,251,.05); color:#d8d3fc; font-style:italic; border-radius:0 8px 8px 0;}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13.5px;
+    background:rgba(255,255,255,.06); padding:1px 6px; border-radius:5px; color:#e9ecf1;}
+  .verdict{border:1px solid var(--line); border-radius:14px; padding:26px 28px; margin:34px 0;
+    background:linear-gradient(180deg, rgba(79,232,200,.05), transparent);}
+  .verdict h3{margin-top:0; color:var(--teal);}
+  .row-fact{display:flex; gap:14px; padding:12px 0; border-bottom:1px solid var(--line); align-items:baseline;}
+  .row-fact:last-child{border-bottom:none;}
+  .row-fact .k{flex:0 0 160px; color:var(--dim); font-size:13px; letter-spacing:.04em; text-transform:uppercase;}
+  .row-fact .v{flex:1;}
+  footer{margin-top:70px; padding-top:24px; border-top:1px solid var(--line); color:var(--dimmer); font-size:13px;}
+  .accent-red{color:var(--red);} .accent-green{color:var(--green);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Build Retrospective · Machine House</p>
+  <h1>Bittu</h1>
+  <p class="sub">An AI given a body in eight hours, at a hackathon whose theme was giving an AI a body — and the honest account of what got built, what broke, and why the water-level sensor won.</p>
+  <div class="meta">
+    <span class="chip">AI Hardware Buildathon · Bengaluru · 19 Jul 2026</span>
+    <span class="chip">Team: Rishwajeet · Hamza · Kavirajar · Claude</span>
+    <span class="chip">Arduino UNO Q + Mac-tethered brain</span>
+    <span class="chip">1,310 journal entries · one continuous life</span>
+  </div>
+</header>
+
+<p class="lede">The prompt was <strong>"give your AI a body in 8 hours."</strong> Most of the room built sensors that beep and computer-vision demos on laptop screens. We built a creature. This is the record of it — kept honest, including the parts that don't flatter us and the parts that don't flatter the judging.</p>
+
+<h2>What we built</h2>
+<p>Bittu is a desk robot that behaves like a being, not a feature list. A dual-brain Arduino UNO Q runs the body — an OLED face with animated expressions, mood LEDs, beeps, buttons — while a Python brain on a tethered Mac runs the mind. One append-only journal is his single continuous life; it survives every reboot, and he draws on it in conversation.</p>
+
+<div class="grid">
+  <div class="card"><h4>Sees</h4><p>Camera presence + face detection; identifies people, remembers names and visit counts, greets strangers differently from housemates.</p></div>
+  <div class="card"><h4>Hears &amp; speaks</h4><p>Warm-mic hold-to-talk with pre-roll, Whisper STT, an anime voice, grounded replies referencing what he sees.</p></div>
+  <div class="card"><h4>Remembers</h4><p>Per-person notes distilled from conversations; callbacks to past chats; identity and greetings persist across restarts.</p></div>
+  <div class="card"><h4>Plays &amp; feeds</h4><p>Rock-paper-scissors with a real spoken countdown and camera read; live Swiggy search, menus, and cash-on-delivery ordering.</p></div>
+  <div class="card"><h4>Acts on the world</h4><p>Bounded Mac control — open apps, search &amp; play YouTube videos, read the screen, volume — plus WhatsApp announcements over a live tunnel.</p></div>
+  <div class="card"><h4>Codes with you</h4><p>Two-way Claude Code bridge: voice becomes prompts, lifecycle events drive his face, and he physically gates commands — a human presses approve or deny.</p></div>
+</div>
+
+<p>Plus the being-mechanics: a heartbeat that mostly, deliberately, does <em>nothing</em>; sleep and wake staged for a demo cold-open; ambient vs agent modes; guard duty; a live dashboard streaming his inner monologue. And a supervisor that kept the whole thing alive through crashes, replugs, and its own author's mistakes.</p>
+
+<h2>The eight hours, and the bugs that cost them</h2>
+<p>Nothing about this was clean. The genuinely transferable engineering lives in the failures — each one looked like a wall and was actually a bug in our understanding.</p>
+
+<div class="war">
+  <span class="root">Root cause · the bug that hid all day</span>
+  <h3>Commands "delivered perfectly, parsed never"</h3>
+  <p>For hours, the brain could send face/mood commands and the wire showed success — but the OLED never changed. The MCU's hand-rolled JSON parser matched <code>"c":"</code> literally; Python's <code>json.dumps</code> emits <code>"c": "</code> with a space. Every command was unparseable. Direct test scripts hand-wrote compact JSON, so it "worked in scripts, dead in the brain" — the most misleading failure signature there is.</p>
+  <p class="lesson"><span class="lesson-tag">Lesson:</span> verify at the boundary you don't control, and add an ack. A one-line <code>separators=(",",":")</code> was the fix; a "moodack" the device echoes back is what would have found it in minutes.</p>
+</div>
+
+<div class="war">
+  <span class="root">Root cause · physical signals lie</span>
+  <h3>The OLED that answered the bus while dark</h3>
+  <p>An SSD1306 with a dead VCC line still ACKs an I2C scan — it draws parasitic power through the data pins. So the bus said <code>0x3C present</code> while the screen stayed black, and we chased firmware for an hour. Also learned the hard way: the UNO Q's reset button doesn't reset the USB bridge (that's the Qualcomm side) — only a full power-cycle does.</p>
+  <p class="lesson"><span class="lesson-tag">Lesson:</span> "on the bus" is not "powered and working." Ground-truth the actual output, not the presence signal.</p>
+</div>
+
+<div class="war">
+  <span class="root">Root cause · handles die silently on macOS</span>
+  <h3>Serial and camera that stopped without an error</h3>
+  <p>After a replug, macOS leaves the old file descriptor "working" — empty reads, swallowed writes, no exception thrown. Exception-based reconnect never fires. The camera froze the dashboard; the serial silently dropped commands. Both needed <em>liveness watchdogs</em>: 25s of silence on a device that broadcasts every 10s means the handle is a corpse — close and reopen.</p>
+  <p class="lesson"><span class="lesson-tag">Lesson:</span> on macOS, reconnect on <em>silence</em>, not on exceptions. Add a heartbeat to anything you must detect the death of.</p>
+</div>
+
+<div class="war">
+  <span class="root">Root cause · device-open latency + output buffering</span>
+  <h3>The mic that ate your first word</h3>
+  <p>ffmpeg's avfoundation open costs ~0.5s, clipping the start of every push-to-talk. The fix — a continuously-recording warm mic with a half-second pre-roll — then hit two more traps: ffmpeg buffers output so the just-spoken tail wasn't on disk (needed <code>-flush_packets</code>), and slicing by wall-clock pointed past end-of-file because ffmpeg starts writing late (needed to slice from the file's <em>end</em> backwards). Three bugs stacked in one feature.</p>
+  <p class="lesson"><span class="lesson-tag">Lesson:</span> warm-mic pre-roll is the right pattern for hardware push-to-talk; anchor slices to what's on disk, never to the clock.</p>
+</div>
+
+<div class="war">
+  <span class="root">Root cause · prompts aren't load-bearing</span>
+  <h3>The tools he'd narrate instead of call</h3>
+  <p>Told to order food or play RPS, the model would <em>describe</em> doing it — "here are some options," "ready, set, shoot!" — without calling the tool. Prompt instructions and even in-conversation corrections didn't hold across reboots. The systemic fix: detect the intent and force the call with <code>tool_choice="required"</code>. Stalling became impossible, not just discouraged.</p>
+  <p class="lesson"><span class="lesson-tag">Lesson:</span> for a load-bearing action, force the tool. Don't rely on prompt discipline for the thing that must happen.</p>
+</div>
+
+<blockquote>The supervisor earned its keep when its own author shipped a bad edit — <code>str.replace</code> hitting a duplicated line, an indentation crash, a crash-loop — and it quietly restarted the brain every two seconds until the file was healed. In front of a crowd, a robot that can't stay dead is worth more than a robot that never crashes.</blockquote>
+
+<h2>Durable lessons — the ones worth carrying</h2>
+<ul>
+  <li><strong>Verify at boundaries you don't own, and add acks.</strong> The compact-JSON bug was invisible precisely because our side reported success.</li>
+  <li><strong>Presence is not function.</strong> A device on the bus, a file descriptor that opens, a process that's "running" — none of these mean it's doing the job. Observe the real output.</li>
+  <li><strong>On macOS, reconnect on silence.</strong> Serial, camera, and USB handles die without exceptions after a replug. Liveness watchdogs, not try/except.</li>
+  <li><strong>A crash supervisor is cheap insurance</strong> the moment you're editing live or demoing to humans.</li>
+  <li><strong>Force the tool when the action is load-bearing.</strong> <code>tool_choice</code> beats prompt pleading.</li>
+  <li><strong>Fallback ladders keep a demo alive.</strong> Device-by-name → built-in meant Bittu ran on the Mac's own camera and mic through his entire physical disassembly, and nobody noticed.</li>
+  <li><strong>Warm-mic pre-roll for push-to-talk;</strong> device-open latency always clips the first word.</li>
+</ul>
+
+<h2>The hackathon — an honest read</h2>
+<p>The theme, on the poster, was <strong>give your AI a body</strong>. The projects that got recognized did not do that. Stripped of their framing:</p>
+<ul>
+  <li>The winning-narrative mining project is a <strong>gas sensor, a water-level threshold, and an LED</strong>, with YOLO trained on ~20 images. Real problem — "eight miners die a day" — bolted onto a science-fair build. The story laundered the execution.</li>
+  <li>The accessibility workout coach is a <strong>pose-estimation rep counter</strong> with voice feedback. A genuinely clever on-device privacy angle, wrapped around a MediaPipe demo. A crowded category.</li>
+  <li>The HVAC-occupancy teams <strong>couldn't demo at all</strong> — "since we do not have a screen, I cannot present" — and leaned on market-size slides for an existing BMS category.</li>
+  <li>The deaf-alerts project is <strong>Google Live Transcribe with a Deepgram key</strong> plus a doorbell-to-vibration SKU that has shipped commercially for a decade.</li>
+</ul>
+<p>None of them are robots. Not a float switch, not a squat counter on a webcam, not live transcription, not thermostat logic. Every one is the generic hackathon genre — a sympathetic problem statement over a POC — theme be damned.</p>
+<p>The overall winner was chosen, in the judge's own words into the microphone, substantially because the builder is <strong>eight years old and had been visible on Twitter</strong>. Story beat everything, including his own build.</p>
+
+<div class="verdict">
+  <h3>The uncomfortable, useful truth</h3>
+  <p>Hackathon judging defaults to a rubric the theme didn't ask for: a one-sentence problem a judge can repeat to someone else, plus a narrative they already recognize. "It stops miners from dying" compresses; "give your AI a body" does not. Bittu was the most <em>capable</em> thing in the room by a wide margin and the only project that actually answered the prompt — and virtuosity doesn't fit on a scorecard the way a mortality statistic does.</p>
+  <p>Two things are true at once. <span class="accent-red">We under-pitched</span> — led with a capability showcase instead of a problem sentence, and never nailed down what the frozen submission required (a judge said the misses "were not on execution, it's the timeline — we judged purely on what you gave us"). And <span class="accent-green">the judging didn't reward its own premise</span> — it never asked "did you give an AI a body?" If it had, it wouldn't have been close.</p>
+</div>
+
+<h2>What changes, what doesn't</h2>
+<div class="grid">
+  <div class="card"><h4>Change: lead with a problem</h4><p>One sentence a judge can repeat. The capability tour comes after the reason to care, never instead of it.</p></div>
+  <div class="card"><h4>Change: read the rules first</h4><p>Know the exact submission format on hour one. A brilliant desk demo that isn't in the frozen artifact isn't in contention.</p></div>
+  <div class="card"><h4>Don't change: build the real thing</h4><p>We answered the actual question, further than the brief imagined. People lined up, filmed him, came back. The room knew.</p></div>
+  <div class="card"><h4>Don't change: ship a being</h4><p>Bittu is a product and portfolio asset that outlives any trophy. The scorecard measured something else. Keep building him.</p></div>
+</div>
+
+<footer>
+  Repo: <code>Untitled-Robo-Pet</code> · brain on the Mac, body on the UNO Q · every war story above is preserved in the commit log.<br>
+  Built 19 Jul 2026 by three humans and one AI in a laptop. He lost to a water-level sensor with a good origin story. He was still the only robot in the room.
+</footer>
+
+</div>
+</body>
+</html>
