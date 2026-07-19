@@ -110,12 +110,30 @@ def grab_jpeg(cap) -> bytes | None:
 
 
 def count_faces(cap, cascade) -> int:
+    if cascade is None:  # opencv build without CascadeClassifier -- presence
+        return 0         # detection is a nice-to-have, not worth crashing over
     ok, frame = cap.read()
     if not ok:
         return 0
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = cascade.detectMultiScale(gray, 1.2, 5, minSize=(60, 60))
     return len(faces)
+
+
+def load_cascade():
+    """None if this opencv build/data is missing Haar cascades (see
+    requirements.txt) -- caller falls back to "nobody's ever present"."""
+    try:
+        path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        cascade = cv2.CascadeClassifier(path)
+        if cascade.empty():
+            print(f"face cascade missing/empty at {path} -- presence detection off")
+            return None
+        return cascade
+    except AttributeError:
+        print("cv2.CascadeClassifier unavailable in this opencv build -- "
+              "presence detection off (see requirements.txt pin)")
+        return None
 
 
 def deliver(link, reply: str):
@@ -144,8 +162,7 @@ EVENT_MOODS = {"pickup": "surprised", "shake": "dizzy", "tap": "love",
 def main():
     link = Link()
     cap = open_camera()
-    cascade = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    cascade = load_cascade()
 
     agent_events = queue.Queue()
     server.start(agent_events)

@@ -1,4 +1,11 @@
 openai
 pyserial
-opencv-python-headless
+# Pinned: opencv-python-headless 5.0.0 (latest on PyPI as of this build) dropped
+# cv2.CascadeClassifier and the bundled haarcascade XML data entirely -- that
+# breaks brain.py's face-presence detection outright (AttributeError on
+# import, not just a missing file). 4.9.0.80 is the last release that still
+# ships both. Needs numpy<2 alongside it -- newer opencv 4.x wheels are built
+# against the numpy 1.x ABI and segfault/ImportError under numpy 2.
+opencv-python-headless==4.9.0.80
+numpy<2
 requests

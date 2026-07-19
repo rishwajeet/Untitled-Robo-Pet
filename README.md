@@ -1,5 +1,38 @@
 # BITTU — desk robot with senses (Buildathon, Desk 21)
 
+## STATUS — live, updated by the orchestrator session
+
+| Piece | State |
+|---|---|
+| MCU sketch | **FLASHED & BOOTED** — `mcu/robot_body_faces/` (bitmap faces + `claude_*` agent faces) is ON the board. `mcu/robot_body/` = proven fallback, 30s reflash. |
+| Wiring | in progress → follow **WIRING.md** (3.3V everywhere; wire first, reset after) |
+| Serial protocol | flashed but unverified → serial test at bottom of WIRING.md proves it |
+| Linux brain (`linux/`) | written + Mac-verified pieces; NOT yet deployed to the board (adb deploy in progress) |
+| Dashboard `linux/dashboard.py` | verified on Mac — run on the Q, browse `:8302` |
+| Claude Code bridge + hooks | **fully verified against real claude session** — runbook below; ROBOT_IP trap in bold |
+| Glyph C6 audio | sketch ready, NOT flashed — need speaker pin/interface answer from help desk |
+| Swiggy MCP | client written, untested — needs OTP token dance (do late afternoon) |
+| Faces/animations assets | in repo (Hamza); bitmaps live on board, GIFs not yet used |
+
+Compile/flash from THIS Mac works directly:
+```bash
+arduino-cli compile --fqbn arduino:zephyr:unoq mcu/robot_body_faces/robot_body_faces.ino
+arduino-cli upload  --fqbn arduino:zephyr:unoq -p /dev/cu.usbmodemXXXX mcu/robot_body_faces/robot_body_faces.ino
+# first upload sometimes logs "verify failed in bank" — run upload AGAIN; second pass is clean (stale-bank quirk)
+```
+
+**Flashing from ANY OTHER laptop needs 3 one-time things:**
+1. `arduino-cli core install arduino:zephyr` (+ libs: Adafruit SSD1306, Adafruit GFX, Arduino_Modulino)
+2. **Patch Adafruit_SSD1306.h** (~line 54, in the HAVE_PORTREG #if chain) — add:
+   ```c
+   #elif defined(ARDUINO_ARCH_ZEPHYR)
+   #undef HAVE_PORTREG
+   ```
+   Without it the build explodes inside `gpio_lowlevel_stm32.h` (the lib's
+   fast-SPI pin path is incompatible with the Zephyr core).
+3. Include order in any new sketch: `Modulino.h` BEFORE the Adafruit headers
+   (SSD1306's bare `WHITE`/`BLACK` macros mangle Modulino's color externs).
+
 **Face assets ready** (`assets/faces/`): 128x32 1-bit bitmaps +
 `pet_faces.h`, Adafruit_GFX-compatible. To use them in
 `mcu/robot_body/robot_body.ino`: copy `pet_faces.h` next to the sketch,
@@ -16,9 +49,8 @@ on the MCU.
 
 ## Deploy (fastest path)
 
-1. **MCU first** — flash `mcu/robot_body/robot_body.ino` via Hydron.
-   Libraries: `Adafruit SSD1306`, `Adafruit GFX`, `Modulino`.
-   This alone = eyes + blink + touch reactions + beeps. Milestone 1 done.
+1. **MCU** — DONE (see STATUS). Reflash commands are in STATUS above.
+   The flashed sketch alone = eyes + blink + touch reactions + beeps.
 2. **Linux side** — copy `linux/` onto the UNO Q (scp or Hydron), then:
    `pip install -r requirements.txt`
    Full run (all optional except the first two):
