@@ -14,96 +14,115 @@ def canvas():
 
 
 def eye(draw, box, pupil=None):
-    draw.rounded_rectangle(box, radius=5, outline=1, width=2)
+    """A soft, high-contrast pet eye with a tiny catchlight."""
+    draw.rounded_rectangle(box, radius=7, fill=1)
     if pupil:
         x, y = pupil
-        draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=1)
+        draw.ellipse((x - 3, y - 4, x + 3, y + 4), fill=0)
+        draw.point((x - 1, y - 2), fill=1)
 
 
-def normal_eyes(draw, left=(42, 15), right=(86, 15)):
-    eye(draw, (25, 6, 57, 25), left)
-    eye(draw, (71, 6, 103, 25), right)
+def normal_eyes(draw, left=(42, 13), right=(86, 13)):
+    eye(draw, (29, 3, 55, 23), left)
+    eye(draw, (73, 3, 99, 23), right)
+
+
+def cheeks(draw, y=23):
+    """Two-pixel blush marks read well without color on the tiny OLED."""
+    draw.line((19, y, 23, y), fill=1, width=2)
+    draw.line((105, y, 109, y), fill=1, width=2)
 
 
 def idle():
     image, draw = canvas()
     normal_eyes(draw)
+    draw.arc((59, 20, 69, 28), 15, 165, fill=1, width=2)
     return image
 
 
 def happy():
     image, draw = canvas()
-    draw.arc((24, 10, 58, 30), 200, 340, fill=1, width=3)
-    draw.arc((70, 10, 104, 30), 200, 340, fill=1, width=3)
-    draw.arc((57, 20, 71, 29), 10, 170, fill=1, width=2)
+    draw.arc((27, 3, 57, 23), 195, 345, fill=1, width=4)
+    draw.arc((71, 3, 101, 23), 195, 345, fill=1, width=4)
+    cheeks(draw, 22)
+    draw.pieslice((56, 18, 72, 31), 5, 175, fill=1)
+    draw.pieslice((59, 20, 69, 27), 5, 175, fill=0)
     return image
 
 
 def working():
     image, draw = canvas()
-    eye(draw, (25, 8, 57, 25), (47, 16))
-    eye(draw, (71, 8, 103, 25), (93, 16))
-    draw.line((24, 5, 55, 8), fill=1, width=2)
-    draw.line((73, 8, 104, 5), fill=1, width=2)
+    eye(draw, (29, 6, 55, 24), (46, 15))
+    eye(draw, (73, 6, 99, 24), (90, 15))
+    draw.line((28, 3, 53, 6), fill=1, width=2)
+    draw.line((75, 6, 100, 3), fill=1, width=2)
+    draw.line((59, 27, 69, 27), fill=1, width=2)
     return image
 
 
 def listening():
     image, draw = canvas()
-    eye(draw, (27, 7, 55, 25), (41, 16))
-    eye(draw, (73, 7, 101, 25), (87, 16))
-    draw.arc((4, 8, 20, 24), 270, 90, fill=1, width=2)
-    draw.arc((108, 8, 124, 24), 90, 270, fill=1, width=2)
+    eye(draw, (31, 5, 55, 24), (43, 14))
+    eye(draw, (73, 5, 97, 24), (85, 14))
+    draw.arc((5, 7, 22, 25), 270, 90, fill=1, width=2)
+    draw.arc((106, 7, 123, 25), 90, 270, fill=1, width=2)
+    draw.ellipse((61, 25, 67, 29), outline=1, width=2)
     return image
 
 
 def speaking():
     image, draw = canvas()
-    normal_eyes(draw, (42, 14), (86, 14))
-    draw.ellipse((59, 22, 69, 30), outline=1, width=2)
+    normal_eyes(draw, (42, 12), (86, 12))
+    cheeks(draw, 23)
+    draw.ellipse((57, 21, 71, 30), fill=1)
+    draw.ellipse((60, 23, 68, 28), fill=0)
     return image
 
 
 def waiting():
     image, draw = canvas()
-    normal_eyes(draw, (42, 18), (86, 18))
-    draw.line((58, 27, 70, 27), fill=1, width=2)
+    normal_eyes(draw, (38, 15), (82, 15))
+    draw.arc((55, 23, 69, 30), 195, 345, fill=1, width=2)
+    draw.point((106, 6), fill=1)
+    draw.ellipse((111, 2, 115, 6), outline=1)
     return image
 
 
 def error():
     image, draw = canvas()
-    draw.line((27, 8, 54, 24), fill=1, width=3)
-    draw.line((54, 8, 27, 24), fill=1, width=3)
-    draw.line((74, 8, 101, 24), fill=1, width=3)
-    draw.line((101, 8, 74, 24), fill=1, width=3)
-    draw.line((58, 29, 70, 29), fill=1, width=2)
+    draw.polygon(((28, 7), (55, 12), (52, 23), (32, 22)), fill=1)
+    draw.polygon(((73, 12), (100, 7), (96, 22), (76, 23)), fill=1)
+    draw.ellipse((42, 14, 48, 20), fill=0)
+    draw.ellipse((80, 14, 86, 20), fill=0)
+    draw.arc((55, 23, 73, 32), 195, 345, fill=1, width=3)
     return image
 
 
 def sleeping():
     image, draw = canvas()
-    draw.arc((24, 9, 58, 25), 15, 165, fill=1, width=3)
-    draw.arc((70, 9, 104, 25), 15, 165, fill=1, width=3)
-    draw.text((108, 2), "z", fill=1, font=ImageFont.load_default())
-    draw.text((116, 9), "Z", fill=1, font=ImageFont.load_default())
+    draw.arc((27, 7, 57, 23), 15, 165, fill=1, width=4)
+    draw.arc((71, 7, 101, 23), 15, 165, fill=1, width=4)
+    draw.arc((58, 22, 70, 29), 15, 165, fill=1, width=2)
+    draw.text((104, 0), "z", fill=1, font=ImageFont.load_default())
+    draw.text((113, 7), "Z", fill=1, font=ImageFont.load_default())
     return image
 
 
 def surprised():
     image, draw = canvas()
-    draw.ellipse((27, 5, 55, 27), outline=1, width=2)
-    draw.ellipse((73, 5, 101, 27), outline=1, width=2)
-    draw.ellipse((38, 12, 44, 18), fill=1)
-    draw.ellipse((84, 12, 90, 18), fill=1)
-    draw.ellipse((61, 23, 67, 30), outline=1)
+    eye(draw, (28, 1, 56, 25), (42, 12))
+    eye(draw, (72, 1, 100, 25), (86, 12))
+    draw.ellipse((59, 23, 69, 31), fill=1)
+    draw.ellipse((62, 25, 66, 29), fill=0)
     return image
 
 
 def blink():
     image, draw = canvas()
-    draw.line((25, 17, 57, 17), fill=1, width=3)
-    draw.line((71, 17, 103, 17), fill=1, width=3)
+    draw.arc((28, 8, 56, 21), 15, 165, fill=1, width=4)
+    draw.arc((72, 8, 100, 21), 15, 165, fill=1, width=4)
+    cheeks(draw, 22)
+    draw.arc((59, 20, 69, 28), 15, 165, fill=1, width=2)
     return image
 
 
