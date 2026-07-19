@@ -50,3 +50,18 @@ weather.update(millis());
 
 Available icon animations are `CLEAR`, `PARTLY_CLOUDY`, `CLOUDY`, `RAIN`,
 `HEAVY_RAIN`, `STORM`, `SNOW`, `FOG`, and `WIND`.
+
+## Message display
+
+`MessageDisplay.h` provides a source-independent notification screen. The
+downstream webhook processor only supplies sender and message text:
+
+```cpp
+MessageDisplay messages(display);
+messages.show("Hamza", "Claude finished the task. Review it now?", millis());
+messages.update(millis());  // call on every loop
+```
+
+The first 480 ms pulses the chat icon. Messages are sanitized to printable
+ASCII, wrapped across two lines, and automatically paginated every 2.6 seconds.
+Call `messages.dismiss()` when the notification is acknowledged.

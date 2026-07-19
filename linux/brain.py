@@ -183,12 +183,17 @@ def main():
     while True:
         # 0) Agent mode: Claude Code events from the HTTP server
         try:
-            _, ae, atext = agent_events.get_nowait()
-            journal.log("agent", f"{ae}: {atext}")
-            m, default_text = AGENT_FX.get(ae, ("curious", None))
-            link.mood(m)
-            link.text(atext or default_text or "working...")
-            if ae == "agent_done":
+            source, ae, atext = agent_events.get_nowait()
+            journal.log(source, f"{ae}: {atext}")
+            if source == "whatsapp":
+                link.mood("curious")
+                link.text(atext)
+                link.beep("curious")
+            else:
+                m, default_text = AGENT_FX.get(ae, ("curious", None))
+                link.mood(m)
+                link.text(atext or default_text or "working...")
+            if source == "agent" and ae == "agent_done":
                 link.beep("happy")
                 try:  # one witty spoken line about the finished task — the wow
                     deliver(link, voice.think(
@@ -196,9 +201,9 @@ def main():
                         "One short smug line about it."))
                 except Exception:
                     pass
-            elif ae == "agent_error":
+            elif source == "agent" and ae == "agent_error":
                 link.beep("angry")
-            elif ae == "agent_ask":
+            elif source == "agent" and ae == "agent_ask":
                 link.beep("surprised")
         except queue.Empty:
             pass

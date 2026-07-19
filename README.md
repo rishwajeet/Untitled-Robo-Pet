@@ -123,6 +123,37 @@ fail-open — buttons never get asked.** Test with:
 board). Test the curl EARLY. If blocked → phone hotspot with laptop + board
 both on it. Decide this before 3pm, not at 4:45.**
 
+## WHAPI WhatsApp webhook
+
+The same port-8300 server accepts WHAPI callbacks at `/whatsapp-webhook`.
+New incoming messages become brief OLED/beep notifications; outgoing messages,
+delivery receipts, and other webhook events are acknowledged without interrupting
+the robot. WHAPI's documented payload wraps new messages in `messages[]` with an
+`event` of `messages.post`.
+
+Run the receiver by itself on the machine behind ngrok:
+
+```bash
+python3 linux/server.py
+```
+
+The configured public callback is:
+
+```text
+https://tosha-unfaked-milena.ngrok-free.dev/whatsapp-webhook
+```
+
+Point the ngrok tunnel at local port `8300`, then check locally:
+
+```bash
+curl http://localhost:8300/whatsapp-webhook
+```
+
+For authentication, optionally set `WHAPI_WEBHOOK_SECRET` before starting the
+server and configure WHAPI to send the same value in an `X-Webhook-Secret`
+custom header. Requests are accepted without that header when the environment
+variable is unset.
+
 ## Audio — Glyph C6 is the voice box (organizer-confirmed)
 
 Flash `mcu/glyph_audio/glyph_audio.ino` on the Glyph C6 (board: "ESP32C6 Dev
@@ -139,11 +170,12 @@ Swiggy has an official MCP server (food / Instamart / dineout), OAuth via
 phone+OTP, **COD orders** — no payment code. Wired into the talk path:
 say "order a chai to desk 21" → agent loop → real order.
 
-1. On the laptop: `npx mcp-remote https://mcp.swiggy.com/food` → browser →
-   phone + OTP. Token lands in `~/.mcp-auth/` — grep for `access_token`.
-2. On the Q: `export SWIGGY_TOKEN=<token>` before running brain.py.
-3. Test in isolation first: `python3 -c "import swiggy_tool;
-   print(swiggy_tool.openai_tools()[:2])"` — if tools list, you're live.
+1. Start Bittu's local server (`python3 linux/server.py`, or the normal brain).
+2. On that machine, open `http://localhost:8300/swiggy/auth`, then complete
+   phone + OTP. The callback stores the five-day access token in memory only.
+3. Check `http://localhost:8300/swiggy/status`; `authenticated` should be true.
+   Restarting requires logging in again. `SWIGGY_TOKEN` remains available as a
+   non-interactive override for demo recovery.
 Showmanship: place the real order ~4:40 so delivery lands DURING judging.
 Do the OTP dance late afternoon (token freshness unknown). Instamart
 (`SWIGGY_MCP=https://mcp.swiggy.com/im`) delivers in ~10 min — better for
