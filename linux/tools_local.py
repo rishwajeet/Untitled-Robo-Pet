@@ -140,9 +140,12 @@ def openai_tools() -> list:
         _tool("lookup", "Short factual summary of a topic (Wikipedia).", "topic"),
         _tool("current_time", "Current day and time."),
         _tool("play_rps", "Play one round of rock-paper-scissors. Call this "
-              "IMMEDIATELY when someone wants to play — the tool runs its own "
-              "spoken countdown and captures on SHOOT. Do not explain rules "
-              "or ask them to show a hand first."),
+              "IMMEDIATELY whenever someone wants to play, says yes to a "
+              "rematch, or says anything like 'let's go/again/one more' in a "
+              "game context. The tool runs its own spoken countdown and "
+              "captures on SHOOT. NEVER announce a round without calling "
+              "this — talking about playing without calling it is refusing "
+              "to play."),
         _tool("set_guard", "Turn desk guard mode on/off. When on, motion at "
               "the desk triggers an alert and a photo.", "on"),
         _tool("agent_prompt", "Send a task/instruction/reply to the live "
