@@ -208,6 +208,8 @@ def main():
     guard_state = {}
     person_greeted = {}
     mode = "ambient"  # double-tap pet toggles "ambient" <-> "agent"
+    current_person = None   # who's at the desk right now (refreshed ~45s)
+    last_ident = 0.0
     listen_deadline = 0.0  # name -> last spoken-greeting ts (30 min social memory)
 
     while True:
@@ -313,6 +315,9 @@ def main():
                 frame = senses.get_latest_frame()
                 greet_face = senses.identify_person(frame, cascade) if frame is not None else None
                 name = (greet_face or {}).get("name")
+                if greet_face and greet_face.get("known"):
+                    current_person = name
+                    last_ident = now
                 if greet_face and greet_face.get("known") and \
                         now - person_greeted.get(name, 0) < 1800:
                     journal.log("seen", f"{name} (still around — no re-greet)")
@@ -354,6 +359,8 @@ def main():
                     display.react("curious")
                     deliver(link, "Sent to Claude. I'll narrate as it works.", display)
                 elif heard:
+                    if current_person:
+                        heard = f"({current_person} is the one speaking to you.) {heard}"
                     reply = voice.think(heard, grab_jpeg(cap), tools=True)
                     display.react("happy")
                     deliver(link, reply, display)
@@ -373,6 +380,22 @@ def main():
                 deliver(link, reply, display)
             except Exception as e:
                 print(f"api failed: {e}")  # MCU already reacted locally — fine
+
+        # 4.5) Continuous identity: know WHO is here, not just that someone is
+        if presence.present and now - last_ident > 45:
+            last_ident = now
+            frame = senses.get_latest_frame()
+            if frame is not None:
+                try:
+                    face = senses.identify_person(frame, cascade)
+                    if face and face.get("known"):
+                        if face["name"] != current_person:
+                            journal.log("seen", f"{face['name']} is here")
+                        current_person = face["name"]
+                except Exception as e:
+                    print(f"ident refresh failed: {e}")
+        elif not presence.present:
+            current_person = None
 
         # 5) Guard mode: watch for motion (~2Hz is plenty)
         if tools_local.GUARD["on"]:

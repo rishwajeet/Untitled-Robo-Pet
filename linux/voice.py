@@ -281,3 +281,21 @@ def record_stop() -> str | None:
 
 def recording() -> bool:
     return _rec["proc"] is not None
+
+def speak_cached(text: str, key: str) -> bool:
+    """Like speak() but caches the wav by key — instant replay for lines we
+    say often (RPS countdown). Blocking playback."""
+    if AUDIO_OUT == "beeps":
+        return False
+    path = f"/tmp/bittu-cache-{key}.wav"
+    if not os.path.exists(path):
+        with client.audio.speech.with_streaming_response.create(
+            model="gpt-4o-mini-tts", voice="echo", input=text,
+            response_format="wav",
+        ) as resp:
+            resp.stream_to_file(path)
+    if platform.system() == "Darwin":
+        subprocess.run(["afplay", path], capture_output=True)
+    else:
+        subprocess.run(["aplay", path], capture_output=True)
+    return True

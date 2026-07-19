@@ -63,6 +63,11 @@ def play_rps(_: str = "") -> str:
     if not _frame_source:
         return "no camera available"
     from openai import OpenAI
+    import voice
+    # the game clock: he counts down himself; hand shows on SHOOT
+    voice.speak_cached("Rock... paper... scissors... SHOOT! Show me your hand!",
+                       "rps-countdown")
+    time.sleep(1.2)  # hand lands after SHOOT
     jpeg = _frame_source()
     if not jpeg:
         return "camera gave me nothing"
@@ -134,8 +139,10 @@ def openai_tools() -> list:
         _tool("weather", "Current weather for a city.", "city"),
         _tool("lookup", "Short factual summary of a topic (Wikipedia).", "topic"),
         _tool("current_time", "Current day and time."),
-        _tool("play_rps", "Play one round of rock-paper-scissors using the "
-              "camera. Tell the human to show their hand FIRST, then call this."),
+        _tool("play_rps", "Play one round of rock-paper-scissors. Call this "
+              "IMMEDIATELY when someone wants to play — the tool runs its own "
+              "spoken countdown and captures on SHOOT. Do not explain rules "
+              "or ask them to show a hand first."),
         _tool("set_guard", "Turn desk guard mode on/off. When on, motion at "
               "the desk triggers an alert and a photo.", "on"),
         _tool("agent_prompt", "Send a task/instruction/reply to the live "
