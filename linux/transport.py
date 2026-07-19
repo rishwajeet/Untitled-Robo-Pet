@@ -112,7 +112,9 @@ class Link:
                 buf = b""
                 self._last_rx = _t.time()
                 continue
-            # single-threaded TX: drain pending writes between reads
+            # single-threaded TX on the persistent fd. (An afternoon of
+            # forensics concluded the CDC link never dropped a byte — the MCU
+            # parser just needs compact JSON. See send().)
             try:
                 while True:
                     line_out, cmd_out, val_out = self._txq.get_nowait()
@@ -203,7 +205,7 @@ class Link:
         payload = {"c": cmd}
         if val:
             payload["v"] = val
-        line = (json.dumps(payload) + "\n").encode()
+        line = (json.dumps(payload, separators=(",", ":")) + "\n").encode()  # MCU parser needs COMPACT json: it matches '"c":"' literally
         if TCP_ADDR:
             with self._sock_lock:
                 sock = self._sock
