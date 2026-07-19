@@ -181,6 +181,7 @@ def main():
     display = EmotionDirector(link)
     cap = open_camera()
     senses.start_capture(cap)
+    voice.start_warm_mic()  # mic hot before any press -> no clipped first words
     cascade = load_cascade()
     senses.report_identification_tier()
 

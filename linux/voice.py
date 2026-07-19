@@ -266,58 +266,76 @@ def speak(text: str) -> bool:
     subprocess.run([player, path], capture_output=True)
     return True
 
-# ---------------- hold-to-talk (press starts, release stops) ----------------
-_rec = {"proc": None, "path": None, "kind": None}
+# ---------------- warm-mic hold-to-talk ----------------
+# The mic records CONTINUOUSLY into a raw ring file the moment the brain
+# starts, so pressing the button never waits on avfoundation's ~0.5s device
+# open. record_start/stop just mark timestamps; we slice the buffer with a
+# 0.5s PRE-ROLL so the first word (spoken as you press) is never clipped.
+_RATE = 16000
+_RAW = "/tmp/bittu-mic.raw"          # s16le mono, headerless (easy byte-slicing)
+_mic = {"proc": None, "t0": 0.0}     # continuous recorder
+_seg = {"active": False, "start": 0.0}
+PREROLL = 0.5
+
+
+def _ensure_warm_mic():
+    if _mic["proc"] and _mic["proc"].poll() is None:
+        return
+    if platform.system() == "Darwin":
+        if not shutil.which("ffmpeg"):
+            raise RuntimeError("warm mic needs ffmpeg on macOS")
+        proc = subprocess.Popen(
+            ["ffmpeg", "-y", "-f", "avfoundation", "-i", f":{_mic_device()}",
+             "-ar", str(_RATE), "-ac", "1", "-f", "s16le", _RAW],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
+    else:
+        proc = subprocess.Popen(
+            ["arecord", "-D", _mic_device(), "-f", "S16_LE", "-r", str(_RATE),
+             "-c", "1", "-t", "raw", _RAW],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _mic.update(proc=proc, t0=time.time())
 
 
 def record_start():
-    """Begin an open-ended recording; record_stop() finalizes and returns
-    the wav path. 30s safety cap so a stuck button can't record forever."""
-    if _rec["proc"] is not None:
-        return
-    path = tempfile.mktemp(suffix=".wav")
-    if platform.system() == "Darwin":  # MAC-ONLY branch
-        mic = _mic_device()
-        if not shutil.which("ffmpeg"):
-            raise RuntimeError("hold-to-talk needs ffmpeg on macOS")
-        proc = subprocess.Popen(
-            ["ffmpeg", "-y", "-fflags", "nobuffer", "-flags", "low_delay",
-             "-probesize", "32", "-analyzeduration", "0",
-             "-f", "avfoundation", "-i", f":{mic}",
-             "-t", "30", "-ar", "16000", "-ac", "1", path],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL)
-        _rec.update(proc=proc, path=path, kind="ffmpeg")
-    else:
-        proc = subprocess.Popen(
-            ["arecord", "-D", _mic_device(), "-f", "S16_LE", "-r", "16000",
-             "-c", "1", "-d", "30", path],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        _rec.update(proc=proc, path=path, kind="arecord")
+    _ensure_warm_mic()
+    _seg.update(active=True, start=time.time())
 
 
 def record_stop() -> str | None:
-    """Stop the held recording. Returns wav path, or None if too short."""
-    import signal as _signal
-    proc, path = _rec["proc"], _rec["path"]
-    _rec.update(proc=None, path=None, kind=None)
-    if proc is None:
+    """Slice [press-0.5s, now] from the warm buffer into a wav. None if empty."""
+    import wave
+    if not _seg["active"]:
         return None
-    proc.send_signal(_signal.SIGINT)  # both ffmpeg and arecord finalize on INT
+    _seg["active"] = False
+    end = time.time()
+    a = max(0.0, _seg["start"] - _mic["t0"] - PREROLL)
+    b = max(a, end - _mic["t0"])
     try:
-        proc.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-    try:
-        if os.path.getsize(path) > 12000:  # ~0.4s of 16kHz mono — else noise
-            return path
+        with open(_RAW, "rb") as f:
+            f.seek(int(a * _RATE) * 2)
+            pcm = f.read(int((b - a) * _RATE) * 2)
     except OSError:
-        pass
-    return None
+        return None
+    if len(pcm) < 8000:  # <0.25s -> noise
+        return None
+    path = tempfile.mktemp(suffix=".wav")
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(_RATE)
+        w.writeframes(pcm)
+    return path
 
 
 def recording() -> bool:
-    return _rec["proc"] is not None
+    return _seg["active"]
+
+
+def start_warm_mic():
+    """Called once at brain startup so the mic is hot before any press."""
+    try:
+        _ensure_warm_mic()
+    except Exception as e:
+        print(f"warm mic start failed: {e}")
 
 def speak_cached(text: str, key: str) -> bool:
     """Like speak() but caches the wav by key — instant replay for lines we
