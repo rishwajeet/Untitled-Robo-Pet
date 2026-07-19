@@ -2,6 +2,12 @@
 
 ## STATUS — live, updated by the orchestrator session
 
+**ARCHITECTURE DECISION (user call): the brain runs ON THE MAC, tethered.**
+C270 + mic + speakers = the MacBook's; board stays the body (faces, LEDs,
+touch, buttons) over USB serial. Best experience now; migrate to the board
+later via env vars + linux/deploy_to_board.sh if time allows. The Q-side
+paths in the code are intact — they ARE the migration.
+
 | Piece | State |
 |---|---|
 | MCU sketch | **FLASHED & BOOTED** — `mcu/robot_body_faces/` (bitmap faces + `claude_*` agent faces) is ON the board. `mcu/robot_body/` = proven fallback, 30s reflash. |
