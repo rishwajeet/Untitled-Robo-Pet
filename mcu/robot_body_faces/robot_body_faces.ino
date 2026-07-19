@@ -376,14 +376,9 @@ void loop() {
   if (millis() - lastMotionPoll > 50) { lastMotionPoll = millis(); checkMotion(); }
 
   // light @ 1Hz
-  if (millis() - lastLdrPoll > 1000) {
-    lastLdrPoll = millis();
-    int ldr = analogRead(PIN_LDR);
-    bool dark = ldr < 200;  // tune on site with Serial print
-    if (dark && !wasDark) { sendEvent("dark"); setMood(SLEEPY, 60000); beepPattern("sleepy"); }
-    if (!dark && wasDark) { sendEvent("light"); setMood(SURPRISED, 2000); }
-    wasDark = dark;
-  }
+  // LDR feature CUT (2026-07-19): A0 jumper removed during boxing — a
+  // floating pin hallucinates day/night. Rewire the divider before re-enabling.
+  (void)lastLdrPoll; (void)wasDark;
 
   if (reactionUntil != 0 && millis() > reactionUntil) reactionUntil = 0;
   drawEyes();

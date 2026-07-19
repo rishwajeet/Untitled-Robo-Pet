@@ -276,6 +276,8 @@ def main():
 
         # 1) MCU events (touch, buttons) — highest priority
         ev = link.next_event(timeout=0.05) or ctl_ev
+        if ev in ("dark", "light"):
+            ev = None  # LDR cut from the build; ignore any stragglers
 
         # Double-tap pet = mode toggle (agent <-> ambient)
         if ev == "pet_double":
