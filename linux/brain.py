@@ -15,6 +15,7 @@ import time
 import cv2
 
 import journal
+import senses
 import server
 import tools_local
 import voice
@@ -91,11 +92,8 @@ AGENT_FX = {
     "agent_ask":     ("surprised", None),        # question text from /ask
 }
 
-CAM_INDEX = 0  # C270
-
-
 def open_camera():
-    cap = cv2.VideoCapture(CAM_INDEX)
+    cap = cv2.VideoCapture(senses.find_camera())
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     return cap
@@ -106,7 +104,9 @@ def grab_jpeg(cap) -> bytes | None:
     if not ok:
         return None
     ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-    return buf.tobytes() if ok else None
+    jpeg = buf.tobytes() if ok else None
+    senses.note_jpeg(jpeg)  # keeps the dashboard's "latest frame" fresh
+    return jpeg
 
 
 def count_faces(cap, cascade) -> int:
@@ -159,10 +159,22 @@ EVENT_MOODS = {"pickup": "surprised", "shake": "dizzy", "tap": "love",
                "pet": "love", "dark": "sleepy", "greet": "happy"}
 
 
+def greet_prompt(face: dict | None) -> str:
+    """Known people get named + a callback to the journal; strangers get
+    the existing generic observational greeting."""
+    if not face or not face.get("known"):
+        return EVENT_PROMPTS["greet"]
+    return (f"{face['name']} just walked back up to your desk — you "
+            f"recognize them (visit #{face['times_seen']} today). Greet "
+            f"them BY NAME with a callback to something you remember about "
+            f"them or a past interaction:\n{journal.recent(8)}")
+
+
 def main():
     link = Link()
     cap = open_camera()
     cascade = load_cascade()
+    senses.report_identification_tier()
 
     agent_events = queue.Queue()
     server.start(agent_events)
@@ -176,6 +188,7 @@ def main():
     present = False
     last_seen = 0.0
     last_greet = 0.0
+    last_count = 0
     last_api = 0.0
     next_beat = time.time() + 45
     guard_state = {}
@@ -220,15 +233,25 @@ def main():
 
         # 2) Presence via local face detect ~2Hz — free and fast
         now = time.time()
+        greet_face = None
         n = count_faces(cap, cascade)
         if n > 0:
             last_seen = now
-            if not present and now - last_greet > 20:
-                present = True
+            became_present = not present
+            present = True
+            # empty->present, OR a second person joins an existing scene —
+            # either is a fresh greet opportunity, same 20s rate-limit. Only
+            # advance last_count on an actual fire, so a bump that arrives
+            # mid-cooldown stays "pending" instead of being silently missed.
+            if (became_present or n > last_count) and now - last_greet > 20:
                 last_greet = now
+                last_count = n
+                ok, frame = cap.read()
+                greet_face = senses.identify_person(frame, cascade) if ok else None
                 ev = ev or "greet"
         elif present and now - last_seen > 6:
             present = False
+            last_count = 0
             link.mood("sleepy")
             link.text("lonely...")
 
@@ -255,7 +278,8 @@ def main():
             journal.log("touch", ev)
             link.mood(EVENT_MOODS[ev])
             try:
-                reply = voice.think(EVENT_PROMPTS[ev], grab_jpeg(cap))
+                prompt = greet_prompt(greet_face) if ev == "greet" else EVENT_PROMPTS[ev]
+                reply = voice.think(prompt, grab_jpeg(cap))
                 deliver(link, reply)
             except Exception as e:
                 print(f"api failed: {e}")  # MCU already reacted locally — fine

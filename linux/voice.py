@@ -1,13 +1,21 @@
 """Ears + mouth + brain: STT, personality chat (with vision), TTS.
 
 Audio out is configurable because the amp is unsolved:
-  AUDIO_OUT=bt      -> aplay to default sink (BT/USB speaker paired first)
+  AUDIO_OUT=bt      -> local playback to default sink (BT/USB speaker paired
+                        first) -- afplay on Mac, aplay on Linux/the board
   AUDIO_OUT=beeps   -> no speech audio; robot beeps + shows text on OLED
 Set OPENAI_API_KEY in the environment.
+
+Demo host is currently this Mac (brain runs here, tethered to the board) --
+record()/speak() use ffmpeg avfoundation + afplay here, arecord/aplay on
+Linux. Both branches stay live; see senses.find_camera()/find_mic() for the
+same Mac-vs-board split on the input side.
 """
 import base64
 import json
 import os
+import platform
+import shutil
 import subprocess
 import tempfile
 
@@ -19,7 +27,21 @@ from openai import OpenAI
 # real key is exported.
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY") or "sk-missing")
 AUDIO_OUT = os.environ.get("AUDIO_OUT", "beeps")
-MIC_DEVICE = os.environ.get("MIC_DEVICE", "default")  # C270 mic; find via: arecord -l
+MIC_DEVICE = os.environ.get("MIC_DEVICE")  # explicit override; unset -> auto-discovered
+_resolved_mic = None
+
+
+def _mic_device() -> str:
+    """MIC_DEVICE env wins if set; otherwise senses.find_mic() resolves the
+    C270's mic once and caches it -- an ALSA device string on Linux
+    (parses `arecord -l`), an avfoundation device index on Mac."""
+    global _resolved_mic
+    if MIC_DEVICE:
+        return MIC_DEVICE
+    if _resolved_mic is None:
+        import senses
+        _resolved_mic = senses.find_mic()
+    return _resolved_mic
 
 SASS = os.environ.get("SASS", "7")  # 0 polite .. 10 menace
 
@@ -30,6 +52,9 @@ Sass level: {SASS}/10. You are witty, a little dramatic, secretly affectionate.
 Replies must be SHORT — 1-2 sentences, spoken aloud. Reference what you SEE in
 the image when relevant (clothes, faces, objects, the chaos of the venue).
 Never mention being an AI language model. You are a robot. Robots have feelings.
+If a human tells you their name for the first time (e.g. "I'm Hamza"), end
+your reply with the tag [[ENROLL:Name]] (it is stripped before you speak —
+the human never sees it). Only once per introduction, not every turn.
 If a human asks you to order food or chai: use your Swiggy tools. Confirm the
 item and the delivery address out loud BEFORE checkout. Cash on delivery only.
 Narrate what you're doing in character ("summoning chai...").
@@ -43,13 +68,39 @@ history = [{"role": "system", "content": PERSONALITY}]
 
 
 def record(seconds=4) -> str:
-    """Record from the C270 mic. Returns wav path."""
+    """Record audio for STT. Returns wav path (16kHz mono).
+
+    Linux (the board): arecord against find_mic()'s ALSA device.
+    MAC (current demo host -- brain runs here, tethered to the board):
+    ffmpeg's avfoundation input against find_mic()'s device index, falling
+    back to sox's `rec` if ffmpeg isn't installed. Never brew-installs
+    anything -- if neither exists this raises loudly instead of pretending
+    to have recorded."""
     path = tempfile.mktemp(suffix=".wav")
-    subprocess.run(
-        ["arecord", "-D", MIC_DEVICE, "-f", "S16_LE", "-r", "16000",
-         "-c", "1", "-d", str(seconds), path],
-        check=True, capture_output=True,
-    )
+    if platform.system() == "Darwin":  # MAC-ONLY branch
+        mic = _mic_device()
+        if shutil.which("ffmpeg"):
+            subprocess.run(
+                ["ffmpeg", "-y", "-f", "avfoundation", "-i", f":{mic}",
+                 "-t", str(seconds), "-ar", "16000", "-ac", "1", path],
+                check=True, capture_output=True,
+            )
+        elif shutil.which("rec"):  # sox
+            subprocess.run(
+                ["rec", "-q", "-r", "16000", "-c", "1", path,
+                 "trim", "0", str(seconds)],
+                check=True, capture_output=True,
+            )
+        else:
+            raise RuntimeError(
+                "no mac audio recorder found -- install ffmpeg (brew install "
+                "ffmpeg) or sox (brew install sox)")
+    else:
+        subprocess.run(
+            ["arecord", "-D", _mic_device(), "-f", "S16_LE", "-r", "16000",
+             "-c", "1", "-d", str(seconds), path],
+            check=True, capture_output=True,
+        )
     return path
 
 
@@ -67,6 +118,7 @@ def think(user_text: str, jpeg_bytes: bytes | None = None,
     guard, Claude Code bridge) + Swiggy MCP if SWIGGY_TOKEN is set.
     """
     import journal
+    import senses
     import swiggy_tool
     import tools_local
 
@@ -130,6 +182,8 @@ def think(user_text: str, jpeg_bytes: bytes | None = None,
         while cut < len(history) and history[cut]["role"] != "user":
             cut += 1
         del history[1:cut]
+    reply = senses.strip_enroll_tag(reply)  # also fires enroll() as a side effect
+    history[-1]["content"] = reply
     journal.log("said", reply[:160])
     return reply
 
@@ -137,7 +191,9 @@ def think(user_text: str, jpeg_bytes: bytes | None = None,
 def speak(text: str) -> bool:
     """Say it out loud if we have a speaker. Returns True if audio played.
 
-    AUDIO_OUT: beeps (no speech) | c6 (stream to Glyph voice box) | bt (aplay).
+    AUDIO_OUT: beeps (no speech) | c6 (stream to Glyph voice box) | anything
+    else -> play locally (afplay on Mac -- built in, plays wav natively;
+    aplay on Linux/the board).
     """
     if AUDIO_OUT == "beeps":
         return False
@@ -149,5 +205,6 @@ def speak(text: str) -> bool:
     if AUDIO_OUT == "c6":
         import audio_c6
         return audio_c6.play_wav(path)
-    subprocess.run(["aplay", path], capture_output=True)
+    player = "afplay" if platform.system() == "Darwin" else "aplay"  # MAC-ONLY branch
+    subprocess.run([player, path], capture_output=True)
     return True
