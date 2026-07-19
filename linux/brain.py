@@ -206,7 +206,8 @@ def main():
     last_api = 0.0
     next_beat = time.time() + 45
     guard_state = {}
-    person_greeted = {}  # name -> last spoken-greeting ts (30 min social memory)
+    person_greeted = {}
+    listen_deadline = 0.0  # name -> last spoken-greeting ts (30 min social memory)
 
     while True:
         # 0) Agent mode: Claude Code events from the HTTP server
@@ -298,14 +299,27 @@ def main():
         elif presence_event == "left":
             display.base("sleepy")
 
-        # 3) Push-to-talk: record -> STT -> reply grounded in what it sees
+        # 3) Hold-to-talk: button press starts the mic, release stops it.
+        # (Cockpit LISTEN has no release event — auto-stops after 6s.)
         if ev == "talk":
-            display.caption("listening...")
-            display.base("attentive")
-            display.activity("listening")
+            if not voice.recording():
+                display.caption("listening...")
+                display.base("attentive")
+                display.activity("listening")
+                try:
+                    voice.record_start()
+                    listen_deadline = now + (6 if ctl_ev == "talk" else 28)
+                except Exception as e:
+                    print(f"record start failed: {e}")
+                    display.caption("ears broke :(")
+                    display.activity(None)
+            continue
+
+        if voice.recording() and (ev == "talk_up" or now > listen_deadline):
+            display.activity(None)
             try:
-                wav = voice.record(4)
-                heard = voice.transcribe(wav)
+                wav = voice.record_stop()
+                heard = voice.transcribe(wav) if wav else ""
                 print(f"HEARD: {heard}")
                 if heard:
                     reply = voice.think(heard, grab_jpeg(cap), tools=True)
@@ -314,8 +328,6 @@ def main():
             except Exception as e:
                 print(f"talk failed: {e}")
                 display.caption("ears broke :(")
-            finally:
-                display.activity(None)
             continue
 
         # 4) Physical events -> witty reaction (rate-limited to stay snappy)

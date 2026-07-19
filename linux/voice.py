@@ -217,3 +217,54 @@ def speak(text: str) -> bool:
     player = "afplay" if platform.system() == "Darwin" else "aplay"  # MAC-ONLY branch
     subprocess.run([player, path], capture_output=True)
     return True
+
+# ---------------- hold-to-talk (press starts, release stops) ----------------
+_rec = {"proc": None, "path": None, "kind": None}
+
+
+def record_start():
+    """Begin an open-ended recording; record_stop() finalizes and returns
+    the wav path. 30s safety cap so a stuck button can't record forever."""
+    if _rec["proc"] is not None:
+        return
+    path = tempfile.mktemp(suffix=".wav")
+    if platform.system() == "Darwin":  # MAC-ONLY branch
+        mic = _mic_device()
+        if not shutil.which("ffmpeg"):
+            raise RuntimeError("hold-to-talk needs ffmpeg on macOS")
+        proc = subprocess.Popen(
+            ["ffmpeg", "-y", "-f", "avfoundation", "-i", f":{mic}",
+             "-t", "30", "-ar", "16000", "-ac", "1", path],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
+        _rec.update(proc=proc, path=path, kind="ffmpeg")
+    else:
+        proc = subprocess.Popen(
+            ["arecord", "-D", _mic_device(), "-f", "S16_LE", "-r", "16000",
+             "-c", "1", "-d", "30", path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _rec.update(proc=proc, path=path, kind="arecord")
+
+
+def record_stop() -> str | None:
+    """Stop the held recording. Returns wav path, or None if too short."""
+    import signal as _signal
+    proc, path = _rec["proc"], _rec["path"]
+    _rec.update(proc=None, path=None, kind=None)
+    if proc is None:
+        return None
+    proc.send_signal(_signal.SIGINT)  # both ffmpeg and arecord finalize on INT
+    try:
+        proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    try:
+        if os.path.getsize(path) > 12000:  # ~0.4s of 16kHz mono — else noise
+            return path
+    except OSError:
+        pass
+    return None
+
+
+def recording() -> bool:
+    return _rec["proc"] is not None

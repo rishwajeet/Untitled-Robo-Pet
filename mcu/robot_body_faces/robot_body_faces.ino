@@ -340,6 +340,7 @@ void loop() {
   // buttons (edge-triggered)
   bool talkDown = digitalRead(PIN_BTN_TALK) == LOW;
   if (talkDown && !talkWasDown) { sendEvent("talk"); setMood(CURIOUS, 8000); beepPattern("curious"); }
+  if (!talkDown && talkWasDown) { sendEvent("talk_up"); }  // hold-to-talk: release stops the mic
   talkWasDown = talkDown;
   bool petDown = digitalRead(PIN_BTN_PET) == LOW;
   if (petDown && !petWasDown) { sendEvent("pet"); setMood(LOVE, 3000); beepPattern("love"); }
