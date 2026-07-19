@@ -701,6 +701,10 @@ function camStart(){
     tick();
   };
   camimg.src = "http://" + location.hostname + ":8300/stream";
+  // MJPEG streams can die silently (img just freezes) — re-arm every 15s
+  setInterval(function(){
+    if (!cam.hidden) camimg.src = "http://" + location.hostname + ":8300/stream?r=" + Date.now();
+  }, 15000);
 }
 camStart();  // his eyes are on by default — CAM chip toggles them off
 document.getElementById("camToggle").classList.add("on");

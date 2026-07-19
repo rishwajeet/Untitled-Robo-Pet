@@ -77,17 +77,32 @@ def start_capture(cap, fps=10):
 
     def _loop():
         global _latest_frame
+        current = cap
+        fails = 0
         interval = 1.0 / fps
         while True:
-            ok, frame = cap.read()
+            ok, frame = current.read()
             if ok:
+                fails = 0
                 _latest_frame = frame
                 ok2, buf = cv2.imencode(".jpg", frame,
                                         [cv2.IMWRITE_JPEG_QUALITY, 70])
                 if ok2:
                     note_jpeg(buf.tobytes())
             else:
-                time.sleep(0.5)  # camera hiccup — don't spin
+                fails += 1
+                time.sleep(0.5)
+                if fails >= 10:  # ~5s dead — the handle died quietly; reopen
+                    try:
+                        current.release()
+                    except Exception:
+                        pass
+                    try:
+                        current = cv2.VideoCapture(find_camera())
+                        journal.log("system", "camera reopened after stall")
+                    except Exception:
+                        pass
+                    fails = 0
             time.sleep(interval)
 
     threading.Thread(target=_loop, daemon=True).start()
