@@ -244,6 +244,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/mode":  # cockpit mode toggle
             _queue.put(("control", "mode", ""))
             self._json(200, {"ok": True})
+        elif path == "/sleep":  # demo staging: sleep until woken by voice
+            _queue.put(("control", "sleep", ""))
+            self._json(200, {"ok": True})
         elif path == "/reload":  # exit; run_bittu.sh supervisor resurrects us
             self._json(200, {"ok": True, "note": "reloading, back in ~60s"})
             import threading as _t

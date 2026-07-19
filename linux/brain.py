@@ -214,7 +214,8 @@ def main():
     last_ident = 0.0
     listen_deadline = 0.0
     last_pet_at = 0.0
-    last_talk_start = 0.0  # name -> last spoken-greeting ts (30 min social memory)
+    last_talk_start = 0.0
+    asleep = False  # name -> last spoken-greeting ts (30 min social memory)
 
     while True:
         # 0) Agent mode: Claude Code events from the HTTP server
@@ -238,6 +239,12 @@ def main():
                     ctl_ev = "talk_up"
                 elif ae == "mode":
                     ctl_ev = "pet_double"
+                elif ae == "sleep":
+                    asleep = True
+                    voice.record_stop()  # drop any open mic
+                    display.base("sleepy")
+                    display.caption("zzz...")
+                    journal.log("system", "asleep — waiting for a wake word")
                 elif ae == "command":
                     cmd = jsonlib.loads(atext)
                     link.send(cmd.get("c", ""), cmd.get("v", ""))
@@ -284,6 +291,34 @@ def main():
         ev = link.next_event(timeout=0.05) or ctl_ev
         if ev in ("dark", "light"):
             ev = None  # LDR cut from the build; ignore any stragglers
+
+        # Asleep: everything suspended except a wake word via the talk button
+        if asleep:
+            if ev == "talk" and not voice.recording():
+                try:
+                    voice.record_start()
+                except Exception:
+                    pass
+            elif voice.recording() and ev == "talk_up":
+                try:
+                    wav = voice.record_stop()
+                    heard = voice.transcribe(wav) if wav else ""
+                    print(f"(asleep) HEARD: {heard}")
+                    if "wake" in heard.lower() or "good morning" in heard.lower():
+                        asleep = False
+                        display.base("idle")
+                        journal.log("system", "WOKE UP")
+                        reply = voice.think(
+                            "You are being woken up in front of an audience "
+                            "(possibly judges!). Yawn, stretch dramatically, "
+                            "then greet the crowd with maximum charm — you "
+                            "can see them in the image.", grab_jpeg(cap))
+                        display.react("happy")
+                        deliver(link, reply, display)
+                except Exception as e:
+                    print(f"wake attempt failed: {e}")
+            time.sleep(0.05)
+            continue
 
         # Voice-requested mode switch (set_mode tool) — consume the flag
         if tools_local.MODE_REQ["want"] and tools_local.MODE_REQ["want"] != mode:
@@ -363,6 +398,7 @@ def main():
             # nothing eats the detection window.
             if not voice.recording() and now - last_talk_start < 1.2:
                 last_talk_start = 0.0
+    asleep = False
                 ev = "pet_double"
             elif not voice.recording():
                 last_talk_start = now

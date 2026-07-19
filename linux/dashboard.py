@@ -457,6 +457,7 @@ main#feed{padding-bottom:190px;}
     <span class="chip danger" id="guard">GUARD</span>
     <span class="chip" id="camToggle">CAM</span>
     <span class="chip face" id="modeToggle">MODE</span>
+    <span class="chip" id="sleep">SLEEP</span>
     <span class="chip danger" id="reload">RELOAD</span>
   </div>
 </div>
@@ -811,6 +812,10 @@ document.querySelectorAll(".chip[data-event]").forEach(function(el){
 });
 document.getElementById("ansYes").addEventListener("click", function(){ post("/answer", {answer:"yes"}); });
 document.getElementById("ansNo").addEventListener("click", function(){ post("/answer", {answer:"no"}); });
+document.getElementById("sleep").addEventListener("click", function(){
+  post("/sleep", {});
+  flash("going to sleep — wake with the talk button + 'wake up'");
+});
 document.getElementById("modeToggle").addEventListener("click", function(){
   post("/mode", {});
   flash("mode toggling — he'll announce it");
