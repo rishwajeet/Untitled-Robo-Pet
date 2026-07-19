@@ -398,7 +398,6 @@ def main():
             # nothing eats the detection window.
             if not voice.recording() and now - last_talk_start < 1.2:
                 last_talk_start = 0.0
-    asleep = False
                 ev = "pet_double"
             elif not voice.recording():
                 last_talk_start = now
