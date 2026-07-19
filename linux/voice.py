@@ -27,6 +27,24 @@ from openai import OpenAI
 # real key is exported.
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY") or "sk-missing")
 AUDIO_OUT = os.environ.get("AUDIO_OUT", "beeps")
+VOICE = os.environ.get("BITTU_VOICE", "coral")
+VOICE_STYLE = os.environ.get("BITTU_VOICE_STYLE",
+    "Cute anime robot companion: chirpy, bright, energetic, slightly "
+    "high-pitched, quick and adorable — a tiny mascot robot. Expressive "
+    "and playful, never flat.")
+VOICE_PITCH = float(os.environ.get("VOICE_PITCH", "1.12"))
+
+
+def _pitch_up(path: str) -> str:
+    """Anime-fy: shift pitch up without changing speed (ffmpeg, 24kHz TTS)."""
+    if VOICE_PITCH == 1.0 or not shutil.which("ffmpeg"):
+        return path
+    out = path + ".pitched.wav"
+    r = subprocess.run(
+        ["ffmpeg", "-y", "-i", path, "-af",
+         f"asetrate=24000*{VOICE_PITCH},aresample=24000,atempo={1/VOICE_PITCH:.4f}",
+         out], capture_output=True)
+    return out if r.returncode == 0 and os.path.exists(out) else path
 MIC_DEVICE = os.environ.get("MIC_DEVICE")  # explicit override; unset -> auto-discovered
 _resolved_mic = None
 
@@ -221,9 +239,11 @@ def speak(text: str) -> bool:
         return False
     path = tempfile.mktemp(suffix=".wav")
     with client.audio.speech.with_streaming_response.create(
-        model="gpt-4o-mini-tts", voice="echo", input=text, response_format="wav",
+        model="gpt-4o-mini-tts", voice=VOICE, input=text,
+        instructions=VOICE_STYLE, response_format="wav",
     ) as resp:
         resp.stream_to_file(path)
+    path = _pitch_up(path)
     if AUDIO_OUT == "c6":
         import audio_c6
         return audio_c6.play_wav(path)
@@ -287,13 +307,16 @@ def speak_cached(text: str, key: str) -> bool:
     say often (RPS countdown). Blocking playback."""
     if AUDIO_OUT == "beeps":
         return False
-    path = f"/tmp/bittu-cache-{key}.wav"
+    path = f"/tmp/bittu-cache-{key}-{VOICE}-{VOICE_PITCH}.wav"
     if not os.path.exists(path):
+        raw = path + ".raw.wav"
         with client.audio.speech.with_streaming_response.create(
-            model="gpt-4o-mini-tts", voice="echo", input=text,
-            response_format="wav",
+            model="gpt-4o-mini-tts", voice=VOICE, input=text,
+            instructions=VOICE_STYLE, response_format="wav",
         ) as resp:
-            resp.stream_to_file(path)
+            resp.stream_to_file(raw)
+        pitched = _pitch_up(raw)
+        os.replace(pitched, path)
     if platform.system() == "Darwin":
         subprocess.run(["afplay", path], capture_output=True)
     else:
