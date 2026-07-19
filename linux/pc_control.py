@@ -148,12 +148,18 @@ def openai_tools() -> list:
             "parameters": {"type": "object", "properties": props,
                            "required": [param] if param else []}}}
     return [
-        t("open_app", "Open an app or site on the human's Mac. Safe list only: "
+        t("open_app", "Open a bare app/site (no search). ONLY when they just "
+          "want the app itself. If they mention searching/playing/finding "
+          "something, use web_search or youtube_search instead. Safe list: "
           + ", ".join(sorted(APPS)) + ".", "name"),
         t("media", "Control media playback on the Mac: play, pause, next, previous.", "action"),
         t("volume", "Change the Mac's volume: up, down, mute, unmute.", "direction"),
-        t("web_search", "Search Google and open the results for a query.", "query"),
-        t("youtube_search", "Search YouTube and open the results for a query.", "query"),
+        t("web_search", "Open Google results for a query. Use whenever someone "
+          "wants to look something up, find info, or search the web.", "query"),
+        t("youtube_search", "Open YouTube search results for a query. USE THIS "
+          "(not open_app) whenever someone wants to PLAY, WATCH, or FIND any "
+          "video/song/music/channel — e.g. 'play a comedy video', 'watch lofi', "
+          "'find CGP Grey'. Pass the topic as the query.", "query"),
         t("see_screen", "Look at / read what is currently on the human's computer screen."),
         t("type_text", "Type text into whatever app is focused on the Mac.", "text"),
     ]
