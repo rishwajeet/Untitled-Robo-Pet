@@ -99,7 +99,7 @@ NEVER say you'll fetch/check/look something up without actually calling the
 tool in that same turn — narrating a fetch without doing it is lying.
 Narrate what you're doing in character ("summoning chai...").
 You have real tools: weather, lookup, time, rock-paper-scissors (camera),
-guard mode, and a bridge to the human's Claude Code coding session — when
+guard mode, Mac control (open apps/sites, media, volume), and a bridge to the human's Claude Code coding session — when
 they say things like "tell claude...", "have the agent...", "how's the task",
 "stop him", use agent_prompt/agent_interrupt. You are the one place all their
 interactions live: desk companion and coding copilot are the same you."""
@@ -162,6 +162,7 @@ def think(user_text: str, jpeg_bytes: bytes | None = None,
     import senses
     import swiggy_tool
     import tools_local
+    import pc_control
 
     journal.log("heard" if tools else "event", user_text[:160])
 
@@ -180,19 +181,30 @@ def think(user_text: str, jpeg_bytes: bytes | None = None,
     tool_defs = None
     local_names = set()
     if use_tools:
-        tool_defs = tools_local.openai_tools()
+        tool_defs = tools_local.openai_tools() + pc_control.openai_tools()
         local_names = {t["function"]["name"] for t in tool_defs}
+        pc_names = {t["function"]["name"] for t in pc_control.openai_tools()}
         if swiggy_tool.available():
             tool_defs += swiggy_tool.openai_tools()
 
+    FOOD_WORDS = ("restaurant", "food", "eat", "hungry", "order", "biryani",
+                  "pizza", "chai", "coffee", "snack", "lunch", "dinner",
+                  "menu", "deliver", "cuisine", "meal")
+    force_tool = (use_tools and swiggy_tool.available()
+                  and any(w in user_text.lower() for w in FOOD_WORDS))
+    first_pass = True
     for _ in range(8):  # tool loop; plain replies exit first pass
         r = client.chat.completions.create(
             model="gpt-4o" if use_tools else "gpt-4o-mini",
             messages=history,
             tools=tool_defs or None,
+            # SYSTEMIC food fix: on food intent, the model MUST call a tool
+            # (Swiggy search) instead of stalling with "I can't access location".
+            tool_choice="required" if (force_tool and first_pass) else None,
             max_tokens=300 if use_tools else 80,
             temperature=1.0,
         )
+        first_pass = False
         msg = r.choices[0].message
         if not msg.tool_calls:
             reply = (msg.content or "...").strip()
@@ -203,7 +215,9 @@ def think(user_text: str, jpeg_bytes: bytes | None = None,
         for tc in msg.tool_calls:
             print(f"TOOL: {tc.function.name}({tc.function.arguments[:120]})")
             args = json.loads(tc.function.arguments or "{}")
-            if tc.function.name in local_names:
+            if tc.function.name in pc_names:
+                result = pc_control.call(tc.function.name, args)
+            elif tc.function.name in local_names:
                 result = tools_local.call(tc.function.name, args)
             else:
                 result = swiggy_tool.call(tc.function.name, args)
