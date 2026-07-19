@@ -35,6 +35,36 @@ _auth = {
 _auth_lock = threading.Lock()
 
 
+_TOKEN_FILE = os.path.expanduser("~/.bittu-swiggy-token.json")
+
+
+def _load_saved_token():
+    """Survive brain restarts: reload the OAuth token from disk if fresh."""
+    try:
+        import json as _json
+        with open(_TOKEN_FILE) as f:
+            saved = _json.load(f)
+        if saved.get("expires_at", 0) > time.time() + 60 and saved.get("access_token"):
+            _auth["access_token"] = saved["access_token"]
+            _auth["expires_at"] = saved["expires_at"]
+    except (OSError, ValueError):
+        pass
+
+
+def _save_token():
+    try:
+        import json as _json
+        with open(_TOKEN_FILE, "w") as f:
+            _json.dump({"access_token": _auth["access_token"],
+                        "expires_at": _auth["expires_at"]}, f)
+        os.chmod(_TOKEN_FILE, 0o600)
+    except OSError:
+        pass
+
+
+_load_saved_token()
+
+
 def _token():
     with _auth_lock:
         if _auth["expires_at"] and time.time() >= _auth["expires_at"] - 60:
@@ -83,6 +113,7 @@ def finish_auth(code: str, state: str):
     with _auth_lock:
         _auth["access_token"] = token["access_token"]
         _auth["expires_at"] = time.time() + int(token.get("expires_in", 432000))
+        _save_token()
         _auth["state"] = _auth["verifier"] = None
     reset_session()
 
