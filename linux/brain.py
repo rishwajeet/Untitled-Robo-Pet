@@ -210,8 +210,22 @@ def main():
     guard_state = {}
     person_greeted = {}
     mode = "ambient"  # double-tap pet toggles "ambient" <-> "agent"
-    current_person = None   # who's at the desk right now (refreshed ~45s)
+    # Persist who was last here so a reboot doesn't ask "who are you" again.
+    import os as _os
+    _CUR = _os.path.expanduser("~/.bittu-current-person")
+    try:
+        current_person = open(_CUR).read().strip() or None
+    except OSError:
+        current_person = None
     last_ident = 0.0
+
+    def _remember_person(name):
+        nonlocal current_person
+        current_person = name
+        try:
+            open(_CUR, "w").write(name or "")
+        except OSError:
+            pass
     listen_deadline = 0.0
     last_pet_at = 0.0
     last_talk_start = 0.0
@@ -379,7 +393,7 @@ def main():
                 greet_face = senses.identify_person(frame, cascade) if frame is not None else None
                 name = (greet_face or {}).get("name")
                 if greet_face and greet_face.get("known"):
-                    current_person = name
+                    _remember_person(name)
                     last_ident = now
                 if greet_face and greet_face.get("known") and \
                         now - person_greeted.get(name, 0) < 1800:
@@ -472,7 +486,7 @@ def main():
                     if face and face.get("known"):
                         if face["name"] != current_person:
                             journal.log("seen", f"{face['name']} is here")
-                        current_person = face["name"]
+                        _remember_person(face["name"])
                 except Exception as e:
                     print(f"ident refresh failed: {e}")
         elif not presence.present:

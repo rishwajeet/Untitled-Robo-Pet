@@ -5,8 +5,10 @@ room where strangers talk to the robot, so one misheard "delete everything"
 must be impossible. Only the verbs below exist. Adding raw shell here would
 be a security hole, not a feature.
 """
+import re
 import shutil
 import subprocess
+import time
 
 import journal
 
@@ -88,7 +90,10 @@ def web_search(query: str) -> str:
     if not q:
         return "search for what?"
     journal.log("pc", f"search {query[:60]}")
-    return _osa(f'open location "https://www.google.com/search?q={q}"')
+    _osa(f'open location "https://www.google.com/search?q={q}"')
+    time.sleep(1.5)
+    peek = see_screen()
+    return f"searched. On screen: {peek[:160]}"
 
 
 def youtube_search(query: str) -> str:
@@ -96,6 +101,31 @@ def youtube_search(query: str) -> str:
     q = urllib.parse.quote((query or "").strip())
     journal.log("pc", f"youtube {query[:60]}")
     return _osa(f'open location "https://www.youtube.com/results?search_query={q}"')
+
+
+
+def play_youtube(query: str) -> str:
+    """Actually PLAY a video: fetch YouTube results, grab the first videoId,
+    open its watch page (autoplays). Falls back to results if fetch fails."""
+    import urllib.parse
+    import urllib.request
+    q = (query or "").strip()
+    if not q:
+        return "play what?"
+    journal.log("pc", f"play {q[:50]}")
+    try:
+        url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(q)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        html = urllib.request.urlopen(req, timeout=8).read().decode("utf-8", "ignore")
+        m = re.search(r'"videoId":"([\w-]{11})"', html)
+        if m:
+            _osa(f'open location "https://www.youtube.com/watch?v={m.group(1)}"')
+            return f"playing the top result for '{q}'"
+    except Exception:
+        pass
+    _osa("open location \"https://www.youtube.com/results?search_query="
+         + urllib.parse.quote(q) + "\"")
+    return f"opened YouTube results for '{q}'"
 
 
 def see_screen(_: str = "") -> str:
@@ -156,17 +186,18 @@ def openai_tools() -> list:
         t("volume", "Change the Mac's volume: up, down, mute, unmute.", "direction"),
         t("web_search", "Open Google results for a query. Use whenever someone "
           "wants to look something up, find info, or search the web.", "query"),
-        t("youtube_search", "Open YouTube search results for a query. USE THIS "
-          "(not open_app) whenever someone wants to PLAY, WATCH, or FIND any "
-          "video/song/music/channel — e.g. 'play a comedy video', 'watch lofi', "
-          "'find CGP Grey'. Pass the topic as the query.", "query"),
+        t("play_youtube", "PLAY a video/song directly — fetches and opens the "
+          "top YouTube result so it starts playing. Use for 'play/watch X', "
+          "'put on some lofi', 'play a comedy video'.", "query"),
+        t("youtube_search", "Open YouTube search RESULTS (a list) for a query, "
+          "when they want to browse rather than auto-play one.", "query"),
         t("see_screen", "Look at / read what is currently on the human's computer screen."),
         t("type_text", "Type text into whatever app is focused on the Mac.", "text"),
     ]
 
 
 DISPATCH = {"open_app": open_app, "media": media, "volume": volume,
-            "web_search": web_search, "youtube_search": youtube_search,
+            "web_search": web_search, "youtube_search": youtube_search, "play_youtube": play_youtube,
             "see_screen": see_screen, "type_text": type_text}
 
 
