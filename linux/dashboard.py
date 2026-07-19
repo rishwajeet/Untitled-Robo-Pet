@@ -459,6 +459,7 @@ main#feed{padding-bottom:190px;}
     <span class="chip" id="modeAmbient">AMBIENT</span>
     <span class="chip face" id="modeAgent">AGENT</span>
     <span class="chip" id="sleep">SLEEP</span>
+    <span class="chip mood" id="wake">WAKE</span>
     <span class="chip danger" id="reload">RELOAD</span>
   </div>
 </div>
@@ -818,7 +819,10 @@ document.getElementById("ansYes").addEventListener("click", function(){ post("/a
 document.getElementById("ansNo").addEventListener("click", function(){ post("/answer", {answer:"no"}); });
 document.getElementById("sleep").addEventListener("click", function(){
   post("/sleep", {});
-  flash("going to sleep — wake with the talk button + 'wake up'");
+  flash("asleep — tap his talk button or WAKE to wake him");
+});
+document.getElementById("wake").addEventListener("click", function(){
+  post("/wake", {});
 });
 document.getElementById("modeAmbient").addEventListener("click", function(){
   post("/mode_set", {mode:"ambient"});

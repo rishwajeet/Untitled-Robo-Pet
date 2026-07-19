@@ -247,8 +247,11 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/mode_set":  # explicit mode selection from the cockpit
             _queue.put(("control", "mode_set", data.get("mode", "")))
             self._json(200, {"ok": True})
-        elif path == "/sleep":  # demo staging: sleep until woken by voice
+        elif path == "/sleep":  # demo staging: sleep until woken
             _queue.put(("control", "sleep", ""))
+            self._json(200, {"ok": True})
+        elif path == "/wake":
+            _queue.put(("control", "wake", ""))
             self._json(200, {"ok": True})
         elif path == "/reload":  # exit; run_bittu.sh supervisor resurrects us
             self._json(200, {"ok": True, "note": "reloading, back in ~60s"})

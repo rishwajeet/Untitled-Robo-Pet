@@ -242,6 +242,8 @@ def main():
                 elif ae == "mode_set":
                     if atext in ("agent", "ambient") and atext != mode:
                         ctl_ev = "pet_double"
+                elif ae == "wake":
+                    ctl_ev = "wake"
                 elif ae == "sleep":
                     asleep = True
                     voice.record_stop()  # drop any open mic
@@ -297,29 +299,26 @@ def main():
 
         # Asleep: everything suspended except a wake word via the talk button
         if asleep:
-            if ev == "talk" and not voice.recording():
+            # ANY talk press or a /wake control wakes him — no word to mishear.
+            if ev in ("talk", "talk_up") or ctl_ev == "wake":
+                if voice.recording():
+                    try:
+                        voice.record_stop()
+                    except Exception:
+                        pass
+                asleep = False
+                display.base("idle")
+                journal.log("system", "WOKE UP")
                 try:
-                    voice.record_start()
-                except Exception:
-                    pass
-            elif voice.recording() and ev == "talk_up":
-                try:
-                    wav = voice.record_stop()
-                    heard = voice.transcribe(wav) if wav else ""
-                    print(f"(asleep) HEARD: {heard}")
-                    if "wake" in heard.lower() or "good morning" in heard.lower():
-                        asleep = False
-                        display.base("idle")
-                        journal.log("system", "WOKE UP")
-                        reply = voice.think(
-                            "You are being woken up in front of an audience "
-                            "(possibly judges!). Yawn, stretch dramatically, "
-                            "then greet the crowd with maximum charm — you "
-                            "can see them in the image.", grab_jpeg(cap))
-                        display.react("happy")
-                        deliver(link, reply, display)
+                    reply = voice.think(
+                        "You are being woken up in front of an audience "
+                        "(possibly judges!). Yawn, stretch dramatically, then "
+                        "greet the crowd with maximum charm — you can see them "
+                        "in the image.", grab_jpeg(cap))
+                    display.react("happy")
+                    deliver(link, reply, display)
                 except Exception as e:
-                    print(f"wake attempt failed: {e}")
+                    print(f"wake greet failed: {e}")
             time.sleep(0.05)
             continue
 
