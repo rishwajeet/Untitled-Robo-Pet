@@ -13,7 +13,11 @@ import tempfile
 
 from openai import OpenAI
 
-client = OpenAI()
+# OpenAI() raises immediately if no key is set anywhere in the env, which
+# would crash the whole brain at import time. Fall back to a placeholder so
+# import always succeeds; real calls just fail (caught by callers) until a
+# real key is exported.
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY") or "sk-missing")
 AUDIO_OUT = os.environ.get("AUDIO_OUT", "beeps")
 MIC_DEVICE = os.environ.get("MIC_DEVICE", "default")  # C270 mic; find via: arecord -l
 
@@ -117,7 +121,15 @@ def think(user_text: str, jpeg_bytes: bytes | None = None,
         history.append({"role": "assistant", "content": reply})
 
     if len(history) > 24:  # keep context small; tool runs are chunky
-        del history[1:len(history) - 12]
+        # A hard index cut can land inside a tool-call round (assistant with
+        # N tool_calls followed by N tool replies) and orphan a leftover
+        # 'tool' message with no preceding tool_calls -- OpenAI's API then
+        # 400s on every future call. Scan forward to the next user turn so
+        # we only ever cut on a clean boundary.
+        cut = len(history) - 12
+        while cut < len(history) and history[cut]["role"] != "user":
+            cut += 1
+        del history[1:cut]
     journal.log("said", reply[:160])
     return reply
 

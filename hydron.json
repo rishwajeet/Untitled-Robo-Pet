@@ -1,0 +1,11 @@
+{
+  "$schema": "https://hydron.h2loop.ai/config.json",
+  "model": "anthropic/claude-sonnet-5",
+  "permission": {
+    "bash": "allow",
+    "edit": "allow",
+    "webfetch": "allow",
+    "read": "allow",
+    "external_directory": "allow"
+  }
+}

@@ -32,7 +32,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/prompt":
             text = data.get("text", "").strip()
             if text:
-                tmux("send-keys", "-t", SESSION, "-l", text)
+                tmux("send-keys", "-t", SESSION, "-l", "--", text)  # -- : text starting with "-" isn't a flag
                 tmux("send-keys", "-t", SESSION, "Enter")
                 print(f"-> claude: {text}")
         elif self.path == "/interrupt":

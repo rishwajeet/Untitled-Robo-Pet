@@ -81,7 +81,10 @@ permission** — talk button = allow, pet button = DENIED.
 
 Setup: get the board's IP (`hostname -I`), replace ROBOT in
 `hooks/settings-snippet.json`, merge into the demo project's
-`.claude/settings.json` on the laptop. Test with:
+`.claude/settings.json` on the laptop. **The robot IP lives in TWO places:
+the JSON's curl URLs AND `export ROBOT_IP=<ip>` before launching claude
+(approve.sh reads the env var). Miss the second and approvals silently
+fail-open — buttons never get asked.** Test with:
 `curl -X POST http://<ip>:8300/event -d '{"e":"agent_done","text":"tests pass"}'`
 
 **Network trap: venue WiFi often has client isolation (laptop can't reach

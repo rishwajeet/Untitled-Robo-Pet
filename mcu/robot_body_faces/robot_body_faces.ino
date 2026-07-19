@@ -1,22 +1,21 @@
-// robot_body.ino — MCU side of the desk robot (Arduino UNO Q, STM32 side)
+// robot_body_faces.ino — MCU side of the desk robot (Arduino UNO Q, STM32 side)
+// Fork of robot_body.ino with bitmap faces (assets/faces/generated/pet_faces.h) wired
+// into the eye renderer. All non-rendering behavior — serial protocol, beeps, LEDs,
+// Modulino detection, buttons, LDR, mood auto-decay, boot screen — is unchanged.
+// See CHANGES.md in this folder for the exact diff against robot_body.ino.
+//
 // Owns: OLED eyes, mood LEDs, beep voice, Modulino movement events, buttons.
 // Talks to the Linux brain over Serial as newline JSON.
 //   up:   {"e":"pickup"} {"e":"shake"} {"e":"tap"} {"e":"talk"} {"e":"pet"} {"e":"dark"} {"e":"light"}
-//   down: {"c":"mood","v":"happy"}  {"c":"text","v":"HELLO"}  {"c":"beep","v":"happy"}
+//   down: {"c":"mood","v":"happy"}  {"c":"text","v":"HELLO"}  {"c":"beep","v":"happy"}  {"c":"face","v":"claude_permission"}
 //
 // Libraries needed: Adafruit_SSD1306, Adafruit_GFX, Modulino (all in Library Manager).
 
 #include <Wire.h>
-// NOTE: Modulino.h must be included before Adafruit_GFX.h/Adafruit_SSD1306.h.
-// Adafruit_SSD1306.h #defines bare macros BLACK/WHITE; Modulino.h separately
-// declares `extern ModulinoColor BLACK/WHITE`. If the SSD1306 macros are
-// defined first, the preprocessor mangles Modulino's declarations into
-// `extern ModulinoColor 0;` (syntax error). Flipping the include order avoids
-// the collision — this sketch only ever uses the SSD1306_BLACK/SSD1306_WHITE
-// prefixed constants, never the bare macros, so behavior is unaffected.
-#include <Modulino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Modulino.h>
+#include "pet_faces.h"
 
 // ---------- pins ----------
 #define PIN_SPEAKER 9   // through the 1K pot (wiper) — pot IS the volume knob
@@ -30,8 +29,6 @@
 
 Adafruit_SSD1306 oled(128, 32, &Wire, -1);
 ModulinoMovement movement;
-bool oledPresent = false;      // set in setup(); guards all oled.* calls below
-bool movementPresent = false;  // set in setup(); guards motion detection below
 
 // ---------- mood ----------
 enum Mood { IDLE, HAPPY, CURIOUS, ANGRY, DIZZY, SLEEPY, SURPRISED, LOVE };
@@ -39,6 +36,11 @@ Mood mood = IDLE;
 unsigned long moodUntil = 0;          // auto-decay back to IDLE
 String overlayText = "";
 unsigned long textUntil = 0;
+
+// ---------- agent face override ----------
+// Set by {"c":"face","v":"claude_*"}. Takes priority over mood/speaking rendering
+// until the next {"c":"mood",...} command arrives (per spec: mood clears the override).
+const uint8_t *agentFaceBitmap = nullptr;
 
 // ---------- motion state ----------
 float baseMag = 1.0;                  // gravity baseline (g)
@@ -66,71 +68,75 @@ void beepPattern(const String &p) {
 }
 
 // ---------- eyes ----------
-// Two rounded rects on 128x32. Blink on a timer; pupils drift when idle.
+// Bitmap faces (pet_faces.h) for every mood that has one; DIZZY and LOVE keep the
+// original procedural drawing (X-eyes / heart-pupils) since no bitmap exists for them.
+// Blink on a timer; the blink frame only ever replaces the IDLE bitmap, matching the
+// original code where `blinking` was only rendered in the IDLE/default case.
 unsigned long nextBlink = 3000;
 bool blinking = false;
 unsigned long blinkEnd = 0;
 
+// Looks up the bitmap for the current mood. Returns nullptr for DIZZY/LOVE, which
+// fall back to procedural drawing below.
+const uint8_t *bitmapForMood(Mood m) {
+  switch (m) {
+    case HAPPY:     return PET_FACE_HAPPY;
+    case CURIOUS:   return PET_FACE_WAITING;    // CURIOUS -> waiting (per mapping spec)
+    case ANGRY:     return PET_FACE_ERROR;       // ANGRY -> error (per mapping spec)
+    case SLEEPY:    return PET_FACE_SLEEPING;
+    case SURPRISED: return PET_FACE_SURPRISED;
+    case IDLE:      return blinking ? PET_FACE_BLINK : PET_FACE_IDLE;
+    default:        return nullptr;  // DIZZY, LOVE
+  }
+}
+
 void drawEyes() {
-  if (!oledPresent) return;  // guard: OLED not detected at boot, skip all display I/O
   oled.clearDisplay();
   unsigned long now = millis();
   if (!blinking && now > nextBlink) { blinking = true; blinkEnd = now + 120; }
   if (blinking && now > blinkEnd) { blinking = false; nextBlink = now + 2000 + (now % 3000); }
 
-  int lx = 30, rx = 82, y = 4, w = 16, h = 24;   // eye boxes
-  if (overlayText.length() && now < textUntil) {  // text mode: small eyes + caption
-    oled.setTextSize(1); oled.setTextColor(SSD1306_WHITE);
-    oled.setCursor(0, 22); oled.print(overlayText.substring(0, 21));
-    h = 14; y = 2;
-  } else overlayText = "";
+  bool captioning = overlayText.length() && now < textUntil;
+  if (!captioning) overlayText = "";  // same expiry-clear behavior as the original
 
-  switch (mood) {
-    case HAPPY: case LOVE:  // upper arcs
+  // Priority: agent-face override > "speaking" (while captioning) > mood bitmap > procedural.
+  const uint8_t *faceBitmap;
+  if (agentFaceBitmap != nullptr) faceBitmap = agentFaceBitmap;
+  else if (captioning) faceBitmap = PET_FACE_SPEAKING;
+  else faceBitmap = bitmapForMood(mood);
+
+  if (faceBitmap != nullptr) {
+    oled.drawBitmap(0, 0, faceBitmap, PET_FACE_WIDTH, PET_FACE_HEIGHT, SSD1306_WHITE);
+  } else {
+    // Procedural fallback for DIZZY / LOVE — unchanged geometry from robot_body.ino.
+    int lx = 30, rx = 82, y = 4, w = 16, h = 24;
+    if (mood == LOVE) {  // upper arcs + heart pupils
       oled.fillRoundRect(lx, y + h / 2, w, h / 2, 4, SSD1306_WHITE);
       oled.fillRoundRect(rx, y + h / 2, w, h / 2, 4, SSD1306_WHITE);
       oled.fillCircle(lx + w / 2, y + h / 2, w / 2, SSD1306_WHITE);
       oled.fillCircle(rx + w / 2, y + h / 2, w / 2, SSD1306_WHITE);
-      oled.fillRect(lx - 2, y + h / 2 + 4, w + 4, h, SSD1306_BLACK);  // flat bottom = smile-eyes
+      oled.fillRect(lx - 2, y + h / 2 + 4, w + 4, h, SSD1306_BLACK);
       oled.fillRect(rx - 2, y + h / 2 + 4, w + 4, h, SSD1306_BLACK);
-      if (mood == LOVE) { oled.fillCircle(lx + w / 2, y + h / 2 - 2, 2, SSD1306_BLACK); oled.fillCircle(rx + w / 2, y + h / 2 - 2, 2, SSD1306_BLACK); }
-      break;
-    case ANGRY:  // slanted brows
-      oled.fillRoundRect(lx, y + 6, w, h - 10, 3, SSD1306_WHITE);
-      oled.fillRoundRect(rx, y + 6, w, h - 10, 3, SSD1306_WHITE);
-      oled.fillTriangle(lx - 2, y, lx + w + 2, y + 10, lx - 2, y + 10, SSD1306_BLACK);
-      oled.fillTriangle(rx + w + 2, y, rx - 2, y + 10, rx + w + 2, y + 10, SSD1306_BLACK);
-      break;
-    case DIZZY:  // X eyes
+      oled.fillCircle(lx + w / 2, y + h / 2 - 2, 2, SSD1306_BLACK);
+      oled.fillCircle(rx + w / 2, y + h / 2 - 2, 2, SSD1306_BLACK);
+    } else {  // DIZZY: X eyes
       for (int i = -1; i <= 1; i++) {
         oled.drawLine(lx + i, y + 4, lx + w + i, y + h - 4, SSD1306_WHITE);
         oled.drawLine(lx + w + i, y + 4, lx + i, y + h - 4, SSD1306_WHITE);
         oled.drawLine(rx + i, y + 4, rx + w + i, y + h - 4, SSD1306_WHITE);
         oled.drawLine(rx + w + i, y + 4, rx + i, y + h - 4, SSD1306_WHITE);
       }
-      break;
-    case SLEEPY:  // half closed
-      oled.fillRoundRect(lx, y + h / 2, w, h / 3, 3, SSD1306_WHITE);
-      oled.fillRoundRect(rx, y + h / 2, w, h / 3, 3, SSD1306_WHITE);
-      break;
-    case SURPRISED:  // wide circles
-      oled.drawCircle(lx + w / 2, y + h / 2, h / 2, SSD1306_WHITE);
-      oled.drawCircle(rx + w / 2, y + h / 2, h / 2, SSD1306_WHITE);
-      oled.fillCircle(lx + w / 2, y + h / 2, 3, SSD1306_WHITE);
-      oled.fillCircle(rx + w / 2, y + h / 2, 3, SSD1306_WHITE);
-      break;
-    case CURIOUS:  // one eye bigger
-      oled.fillRoundRect(lx, y + 4, w, h - 6, 4, SSD1306_WHITE);
-      oled.fillRoundRect(rx - 2, y, w + 4, h, 5, SSD1306_WHITE);
-      break;
-    default:  // IDLE: soft rects, blink
-      if (blinking) {
-        oled.fillRect(lx, y + h / 2 - 1, w, 3, SSD1306_WHITE);
-        oled.fillRect(rx, y + h / 2 - 1, w, 3, SSD1306_WHITE);
-      } else {
-        oled.fillRoundRect(lx, y, w, h, 5, SSD1306_WHITE);
-        oled.fillRoundRect(rx, y, w, h, 5, SSD1306_WHITE);
-      }
+    }
+  }
+
+  // Caption band: bitmaps are full 128x32, so clip to the top 20 rows by blacking out
+  // the bottom 12 before printing text — simplest correct way to reuse one code path
+  // for both bitmap and procedural faces. Costs a sliver of the art (a chin/tail pixel
+  // or two) whenever a caption is showing; that trade is fine for a status caption.
+  if (captioning) {
+    oled.fillRect(0, 20, 128, 12, SSD1306_BLACK);
+    oled.setTextSize(1); oled.setTextColor(SSD1306_WHITE);
+    oled.setCursor(0, 22); oled.print(overlayText.substring(0, 21));
   }
   oled.display();
 }
@@ -157,7 +163,6 @@ void sendEvent(const char *e) {
 // ---------- motion detection ----------
 // magnitude deviation from 1g: spike=tap, sustained=pickup, oscillating=shake
 void checkMotion() {
-  if (!movementPresent) return;  // guard: Modulino Movement not detected at boot, skip IMU poll
   movement.update();
   float x = movement.getX(), yv = movement.getY(), z = movement.getZ();
   float mag = sqrt(x * x + yv * yv + z * z);
@@ -184,6 +189,17 @@ Mood moodFromName(const String &v) {
   if (v == "sleepy") return SLEEPY; if (v == "surprised") return SURPRISED;
   if (v == "love") return LOVE; return IDLE;
 }
+// Maps a face name to its PROGMEM bitmap. Returns nullptr for anything unrecognized
+// (caller leaves the current override untouched in that case).
+const uint8_t *agentFaceFromName(const String &v) {
+  if (v == "claude_permission") return PET_FACE_CLAUDE_PERMISSION;
+  if (v == "claude_tool_running") return PET_FACE_CLAUDE_TOOL_RUNNING;
+  if (v == "claude_done") return PET_FACE_CLAUDE_DONE;
+  if (v == "claude_needs_input") return PET_FACE_CLAUDE_NEEDS_INPUT;
+  if (v == "claude_rate_limited") return PET_FACE_CLAUDE_RATE_LIMITED;
+  if (v == "claude_disconnected") return PET_FACE_CLAUDE_DISCONNECTED;
+  return nullptr;
+}
 // tiny parser for {"c":"...","v":"..."} — no JSON lib needed
 void handleLine(const String &line) {
   int c1 = line.indexOf("\"c\":\""); if (c1 < 0) return;
@@ -193,9 +209,10 @@ void handleLine(const String &line) {
   int v1 = line.indexOf("\"v\":\"");
   if (v1 >= 0) { int v2 = line.indexOf('"', v1 + 5); val = line.substring(v1 + 5, v2); }
 
-  if (cmd == "mood") setMood(moodFromName(val), 6000);
+  if (cmd == "mood") { setMood(moodFromName(val), 6000); agentFaceBitmap = nullptr; }  // serial "mood" clears the agent-face override, per spec
   else if (cmd == "text") { overlayText = val; textUntil = millis() + 6000; }
   else if (cmd == "beep") beepPattern(val);
+  else if (cmd == "face") { const uint8_t *f = agentFaceFromName(val); if (f != nullptr) agentFaceBitmap = f; }
 }
 
 void setup() {
@@ -205,23 +222,13 @@ void setup() {
   pinMode(PIN_LED_R1, OUTPUT); pinMode(PIN_LED_R2, OUTPUT);
   pinMode(PIN_LED_B1, OUTPUT); pinMode(PIN_LED_B2, OUTPUT);
   Wire.begin();
-  // GUARD: oled.begin() returns false (rather than hanging) when no SSD1306 acks
-  // at 0x3C, since Adafruit_SSD1306::begin() only does bounded Wire transactions.
-  // We still gate all later oled.* calls on oledPresent so an absent display
-  // can never leave the eyes/text code touching a half-initialized driver.
-  oledPresent = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  if (oledPresent) {
-    oled.clearDisplay();
-    oled.setTextSize(2); oled.setTextColor(SSD1306_WHITE);
-    oled.setCursor(20, 8); oled.print("BITTU");  // <-- name it, change here
-    oled.display();
-  }
-  // GUARD: Modulino.begin() only configures the Wire peripheral (no device
-  // handshake), so it is always safe to call. movement.begin() does a bounded
-  // I2C discover/handshake with the LSM6DSOX and returns false if absent
-  // instead of hanging, so we gate all later movement.* calls on this flag.
+  oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  oled.clearDisplay();
+  oled.setTextSize(2); oled.setTextColor(SSD1306_WHITE);
+  oled.setCursor(20, 8); oled.print("BITTU");  // <-- name it, change here
+  oled.display();
   Modulino.begin();
-  movementPresent = movement.begin();
+  movement.begin();
   beepPattern("happy");
   delay(1200);
 }

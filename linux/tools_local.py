@@ -68,7 +68,9 @@ def play_rps(_: str = "") -> str:
         return "camera gave me nothing"
     robot = random.choice(["rock", "paper", "scissors"])
     b64 = base64.b64encode(jpeg).decode()
-    r = OpenAI().chat.completions.create(
+    # same missing-key guard as voice.py's client -- OpenAI() alone raises
+    # at construction time if OPENAI_API_KEY is unset.
+    r = OpenAI(api_key=os.environ.get("OPENAI_API_KEY") or "sk-missing").chat.completions.create(
         model="gpt-4o-mini", max_tokens=10,
         messages=[{"role": "user", "content": [
             {"type": "text", "text":
