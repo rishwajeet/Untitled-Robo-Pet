@@ -54,6 +54,7 @@ def _resolve_port() -> str:
 class Link:
     def __init__(self):
         self.events = queue.Queue()
+        self._txq = queue.Queue()
         self._sock = None
         self._sock_lock = threading.Lock()
         self.observer = None
@@ -83,10 +84,67 @@ class Link:
                 if self.observer:
                     self.observer("event", w)
 
-    def _reader(self):
-        buf = b""
+    def _reopen_serial(self):
+        import time as _t
+        try:
+            while True:
+                self._txq.get_nowait()  # drop commands aimed at the dead link
+        except queue.Empty:
+            pass
         while True:
-            buf += self.ser.read(64)
+            try:
+                self.ser = serial.Serial(_resolve_port(), BAUD, timeout=0.1)
+                print("[transport] serial reconnected")
+                return
+            except Exception:
+                _t.sleep(2)  # board unplugged/re-enumerating — keep trying
+
+    def _reader(self):
+        import time as _t
+        buf = b""
+        self._last_rx = _t.time()
+        while True:
+            try:
+                chunk = self.ser.read(64)
+            except (OSError, serial.SerialException):
+                print("[transport] serial lost — reconnecting...")
+                self._reopen_serial()
+                buf = b""
+                self._last_rx = _t.time()
+                continue
+            # single-threaded TX: drain pending writes between reads
+            try:
+                while True:
+                    line_out, cmd_out, val_out = self._txq.get_nowait()
+                    self.ser.write(line_out)
+                    self.ser.flush()
+                    if self.observer:
+                        self.observer(cmd_out, val_out)
+            except queue.Empty:
+                pass
+            except (OSError, serial.SerialException):
+                print("[transport] write failed — reconnecting...")
+                self._reopen_serial()
+                buf = b""
+                self._last_rx = _t.time()
+                continue
+            if chunk:
+                self._last_rx = _t.time()
+            # Silent-corpse detection: macOS keeps a stale fd "working" (empty
+            # reads, void writes, no errors) after the board resets/replugs.
+            # The firmware broadcasts a diag line every 10s — total silence for
+            # 25s means this fd is dead. Reopen.
+            elif _t.time() - self._last_rx > 25:
+                print("[transport] serial silent 25s — stale fd, reopening...")
+                try:
+                    self.ser.close()
+                except Exception:
+                    pass
+                self._reopen_serial()
+                buf = b""
+                self._last_rx = _t.time()
+                continue
+            buf += chunk
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
                 try:
@@ -156,7 +214,11 @@ class Link:
             except OSError:
                 return  # _tcp_loop notices on its next recv() and reconnects
         else:
-            self.ser.write(line)
+            # macOS CDC: writing while another thread blocks in read() on the
+            # same fd silently kills TX. ALL serial I/O lives in _reader now —
+            # this just enqueues; observer fires there, after the real write.
+            self._txq.put((line, cmd, val))
+            return
         if self.observer:
             self.observer(cmd, val)
 

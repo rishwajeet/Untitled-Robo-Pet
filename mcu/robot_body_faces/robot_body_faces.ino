@@ -244,6 +244,7 @@ void handleLine(const String &line) {
     Serial.print(oledPresent ? "true" : "false");
     Serial.println("}");
   }
+<<<<<<< HEAD
   else if (cmd == "base") { mood = moodFromName(val); agentFaceBitmap = nullptr; }
   else if (cmd == "react") { setMood(moodFromName(val), 1800); agentFaceBitmap = nullptr; }
   else if (cmd == "activity") {
@@ -252,6 +253,13 @@ void handleLine(const String &line) {
     else activity = ACT_NONE;
   }
   else if (cmd == "mood") { setMood(moodFromName(val), 6000); agentFaceBitmap = nullptr; }  // compatibility
+=======
+  else if (cmd == "mood") {
+    setMood(moodFromName(val), 6000); agentFaceBitmap = nullptr;
+    Serial.print("{\"e\":\"moodack\",\"v\":\"");  // confess what was actually set
+    Serial.print((int)mood); Serial.println("\"}");
+  }
+>>>>>>> d96a4bd (THE OLED BUG: caption forced speaking-face over mood; mood now wins)
   else if (cmd == "text") { overlayText = val; textUntil = millis() + 6000; }
   else if (cmd == "beep") beepPattern(val);
   else if (cmd == "face") { const uint8_t *f = agentFaceFromName(val); if (f != nullptr) agentFaceBitmap = f; }
@@ -317,7 +325,9 @@ void sendDiag(const char *tag) {
     }
   }
 #endif
-  Serial.println("]}");
+  Serial.print("],\"mood\":"); Serial.print((int)mood);
+  Serial.print(",\"override\":"); Serial.print(agentFaceBitmap != nullptr ? "true" : "false");
+  Serial.println("}");
 }
 
 unsigned long lastMotionPoll = 0, lastLdrPoll = 0, lastDiag = 0;
