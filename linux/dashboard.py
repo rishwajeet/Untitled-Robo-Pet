@@ -100,6 +100,8 @@ class Handler(BaseHTTPRequestHandler):
                 entries = _cache["entries"][since:]
                 total = len(_cache["entries"])
             self._json(200, {"total": total, "entries": entries})
+        elif parts.path == "/status":
+            self._proxy("GET", "/status")
         else:
             self._json(404, {"error": "not found"})
 
@@ -149,6 +151,59 @@ header{
   padding:14px 18px; background:linear-gradient(var(--panel), rgba(17,20,32,.94));
   border-bottom:1px solid var(--line); backdrop-filter:blur(6px);
 }
+.services{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px;
+  padding:12px 16px 6px; max-width:1100px; width:100%; margin:0 auto;}
+.service{min-width:0; padding:10px 12px; border:1px solid var(--line); border-radius:9px;
+  background:rgba(17,20,32,.78);}
+.service-name{font-size:9px; font-weight:750; color:var(--dim); letter-spacing:.12em;
+  text-transform:uppercase; margin-bottom:5px;}
+.service-state{display:flex; align-items:center; gap:7px; font-size:13px; font-weight:700;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.service-state::before{content:""; width:7px; height:7px; flex:none; border-radius:50%;
+  background:var(--teal); box-shadow:0 0 7px rgba(79,232,200,.55);}
+.service.warn .service-state::before{background:var(--amber); box-shadow:none;}
+.service.off .service-state::before{background:var(--dimmer); box-shadow:none;}
+.service.bad .service-state::before{background:var(--red); box-shadow:none;}
+@media(max-width:700px){.services{grid-template-columns:repeat(2,minmax(0,1fr));}}
+.hardware{display:grid; grid-template-columns:minmax(260px,1.4fr) minmax(220px,1fr);
+  gap:12px; padding:10px 16px 14px; max-width:1100px; width:100%; margin:0 auto;
+  border-bottom:1px solid var(--line);}
+.hardware h2{font-size:10px; color:var(--dim); letter-spacing:.13em; text-transform:uppercase;
+  margin:0 0 8px; font-weight:750;}
+.oled-shell{background:#050606; border:5px solid #262b32; border-radius:8px; padding:7px;
+  box-shadow:inset 0 0 18px rgba(0,0,0,.9);}
+.oled-screen{position:relative; height:82px; overflow:hidden; color:#b9fff2;
+  background:radial-gradient(ellipse at center,rgba(79,232,200,.09),transparent 70%),#020807;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; text-shadow:0 0 7px rgba(79,232,200,.75);
+  transform:rotate(180deg);}
+.eyes{height:52px; display:flex; align-items:center; justify-content:center; gap:45px;}
+.eye{width:27px; height:24px; border:4px solid currentColor; border-radius:50%;
+  transition:all .2s ease;}
+.eyes.sleepy .eye{height:4px; border-width:0 0 4px; border-radius:0;}
+.eyes.love .eye{border-radius:55% 55% 45% 45%; transform:rotate(45deg); width:20px; height:20px;}
+.eyes.dizzy .eye{border-radius:0; transform:rotate(45deg); width:18px; height:18px;}
+.eyes.angry .eye{height:14px; border-radius:4px; transform:skewY(-12deg);}
+.eyes.surprised .eye{width:25px; height:30px;}
+.oled-caption{text-align:center; height:22px; padding:1px 5px; overflow:hidden;
+  white-space:nowrap; text-overflow:ellipsis; font-size:12px; text-transform:uppercase;}
+.hardware-side{display:flex; flex-direction:column; justify-content:space-between; gap:12px;}
+.outputs{display:flex; align-items:flex-end; justify-content:space-around; gap:12px; min-height:64px;}
+.output{text-align:center; color:var(--dim); font-size:9px; letter-spacing:.08em; text-transform:uppercase;}
+.led{width:22px; height:22px; margin:0 auto 7px; border-radius:50%; background:#281112;
+  border:2px solid #343840; transition:background .25s,box-shadow .25s,opacity .25s; opacity:.4;}
+.led.blue{background:#10172a}.led.on.red{background:#ff4b55;box-shadow:0 0 18px #ff313e;opacity:1}
+.led.on.blue{background:#4a8cff;box-shadow:0 0 18px #337dff;opacity:1}
+.led.dim{opacity:.65}.led.alt{animation:ledpulse 1s ease-in-out infinite alternate}
+@keyframes ledpulse{from{opacity:.25}to{opacity:1}}
+.speaker{width:34px;height:34px;margin:0 auto 2px;position:relative;color:var(--dim)}
+.speaker::before{content:"";position:absolute;left:4px;top:10px;width:9px;height:14px;background:currentColor}
+.speaker::after{content:"";position:absolute;left:10px;top:6px;border-style:solid;border-width:11px 14px 11px 0;
+  border-color:transparent currentColor transparent transparent;transform:rotate(180deg)}
+.speaker.on{color:var(--amber);animation:sound .35s ease-in-out infinite alternate}
+@keyframes sound{to{filter:drop-shadow(0 0 7px var(--amber));transform:scale(1.08)}}
+.last-action{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim);
+  padding-top:8px;border-top:1px solid var(--line);overflow-wrap:anywhere;}
+@media(max-width:700px){.hardware{grid-template-columns:1fr}.oled-screen{height:72px}}
 .top{display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;}
 .brand{display:flex; align-items:baseline; gap:10px;}
 .brand h1{font-size:16px; letter-spacing:.16em; margin:0; font-weight:800;}
@@ -289,6 +344,38 @@ main#feed{padding-bottom:190px;}
     <span class="mood-word" id="mood">—</span>
   </div>
 </header>
+<section class="services" aria-label="Bittu service health">
+  <div class="service" data-service="robot"><div class="service-name">Robot USB</div><div class="service-state">checking</div></div>
+  <div class="service" data-service="camera"><div class="service-name">Camera</div><div class="service-state">checking</div></div>
+  <div class="service" data-service="openai"><div class="service-name">OpenAI</div><div class="service-state">checking</div></div>
+  <div class="service" data-service="audio"><div class="service-name">Audio</div><div class="service-state">checking</div></div>
+  <div class="service" data-service="swiggy"><div class="service-name">Swiggy MCP</div><div class="service-state">checking</div></div>
+  <div class="service" data-service="whapi"><div class="service-name">WhatsApp</div><div class="service-state">checking</div></div>
+  <div class="service" data-service="bridge"><div class="service-name">Claude Bridge</div><div class="service-state">checking</div></div>
+  <div class="service" data-service="uptime"><div class="service-name">Mac service</div><div class="service-state">starting</div></div>
+</section>
+<section class="hardware" aria-label="Expected Arduino outputs">
+  <div>
+    <h2>Expected OLED</h2>
+    <div class="oled-shell"><div class="oled-screen">
+      <div class="eyes idle" id="oledEyes" aria-label="Expected OLED face"><span class="eye"></span><span class="eye"></span></div>
+      <div class="oled-caption" id="oledText">BITTU</div>
+    </div></div>
+  </div>
+  <div class="hardware-side">
+    <div>
+      <h2>Expected outputs</h2>
+      <div class="outputs">
+        <div class="output"><div class="led red" id="ledR1"></div>Red 1</div>
+        <div class="output"><div class="led red" id="ledR2"></div>Red 2</div>
+        <div class="output"><div class="led blue" id="ledB1"></div>Blue 1</div>
+        <div class="output"><div class="led blue" id="ledB2"></div>Blue 2</div>
+        <div class="output"><div class="speaker" id="speaker"></div>Speaker</div>
+      </div>
+    </div>
+    <div class="last-action" id="lastHardware">waiting for robot</div>
+  </div>
+</section>
 <main id="feed">
   <div class="row k-system placeholder">
     <span class="time"></span><span class="tag">SYSTEM</span>
@@ -455,6 +542,66 @@ function setConnected(ok){
   statusText.textContent = ok ? "LIVE" : "RECONNECTING";
 }
 
+function setService(name, label, state){
+  var card = document.querySelector('[data-service="' + name + '"]');
+  if (!card) return;
+  card.className = "service" + (state ? " " + state : "");
+  card.querySelector(".service-state").textContent = label;
+}
+
+function duration(total){
+  total = Number(total || 0);
+  var h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60);
+  return h ? h + "h " + m + "m" : Math.max(0, m) + "m";
+}
+
+function expectedOutputs(h){
+  h = h || {};
+  var mood = String(h.mood || "idle").toLowerCase();
+  var face = String(h.face || "").replace(/^claude_/, "").replace(/_/g, " ");
+  var visualMood = mood;
+  if (/done/.test(face)) visualMood = "love";
+  else if (/permission|needs input/.test(face)) visualMood = "surprised";
+  else if (/tool|working/.test(face)) visualMood = "curious";
+  else if (/error|disconnected|rate limited/.test(face)) visualMood = "angry";
+  document.getElementById("oledEyes").className = "eyes " + visualMood;
+  var caption = Number(h.text_until || 0) > Date.now() / 1000 ? h.text : "";
+  document.getElementById("oledText").textContent = caption || face || mood;
+  ["ledR1","ledR2","ledB1","ledB2"].forEach(function(id){
+    document.getElementById(id).className = "led " + (id.indexOf("R") > -1 ? "red" : "blue");
+  });
+  function on(id, extra){ document.getElementById(id).classList.add("on"); if(extra) document.getElementById(id).classList.add(extra); }
+  if (mood === "angry") { on("ledR1"); on("ledR2"); }
+  else if (mood === "surprised") { on("ledR1","alt"); on("ledB2","alt"); }
+  else if (mood === "sleepy") { on("ledB1","dim"); on("ledB2","dim"); }
+  else if (mood === "dizzy") { on("ledR1","alt"); on("ledR2","alt"); }
+  else { on("ledB1", mood === "idle" ? "alt" : ""); on("ledB2", mood === "idle" ? "alt" : ""); if(mood === "love") on("ledR1","dim"); }
+  var sounding = h.beep && Number(h.beep_until || 0) > Date.now() / 1000;
+  document.getElementById("speaker").className = "speaker" + (sounding ? " on" : "");
+  document.getElementById("lastHardware").textContent = (h.last_action || "waiting for robot") + " · mood " + mood;
+}
+
+function pollStatus(){
+  fetch("/status", {cache:"no-store"}).then(function(r){
+    if (!r.ok) throw new Error("offline");
+    return r.json();
+  }).then(function(s){
+    setService("robot", s.runtime.robot ? "connected" : "not connected", s.runtime.robot ? "" : "bad");
+    setService("camera", s.runtime.camera ? "video ready" : "not available", s.runtime.camera ? "" : "bad");
+    setService("openai", s.openai ? "key loaded" : "key missing", s.openai ? "" : "bad");
+    setService("audio", s.audio === "beeps" ? "beeps only" : s.audio, s.audio === "beeps" ? "warn" : "");
+    setService("swiggy", s.swiggy.authenticated ? "authenticated" : "login needed", s.swiggy.authenticated ? "" : "warn");
+    setService("whapi", (s.whapi.received || 0) + " received", s.whapi.received ? "" : "off");
+    setService("bridge", s.bridge ? "configured" : "not configured", s.bridge ? "" : "off");
+    setService("uptime", "live · " + duration(s.uptime_seconds), "");
+    expectedOutputs(s.hardware);
+  }).catch(function(){
+    ["robot","camera","openai","audio","swiggy","whapi","bridge","uptime"].forEach(function(k){
+      setService(k, "service offline", "bad");
+    });
+  }).then(function(){ setTimeout(pollStatus, 2000); });
+}
+
 function poll(){
   fetch("/feed?since=" + since, {cache: "no-store"})
     .then(function(r){ return r.json(); })
@@ -484,6 +631,7 @@ function poll(){
 }
 
 poll();
+pollStatus();
 
 /* ---- cockpit wiring ---- */
 var chat = document.getElementById("chat");
@@ -562,6 +710,13 @@ def main():
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"Bittu dashboard on :{PORT}")
     srv.serve_forever()
+
+
+def start():
+    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    print(f"Bittu dashboard on :{PORT}")
+    return srv
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ both ends already written).
 | Wiring | in progress → follow **WIRING.md** (3.3V everywhere; wire first, reset after) |
 | Serial protocol | flashed but unverified → serial test at bottom of WIRING.md proves it |
 | Linux brain (`linux/`) | written + Mac-verified pieces; NOT yet deployed to the board (adb deploy in progress) |
-| Dashboard `linux/dashboard.py` | verified on Mac — run on the Q, browse `:8302` |
+| Dashboard `linux/dashboard.py` | starts with `brain.py` — open `http://localhost:8302` for service health, expected Arduino outputs, and the live journal |
 | Claude Code bridge + hooks | **fully verified against real claude session** — runbook below; ROBOT_IP trap in bold |
 | Glyph C6 audio | sketch ready, NOT flashed — need speaker pin/interface answer from help desk |
 | Swiggy MCP | client written, untested — needs OTP token dance (do late afternoon) |

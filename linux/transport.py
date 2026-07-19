@@ -56,6 +56,7 @@ class Link:
         self.events = queue.Queue()
         self._sock = None
         self._sock_lock = threading.Lock()
+        self.observer = None
         if MOCK:
             print("[MCU] mock mode -- type an event + Enter: "
                   "pickup shake tap talk pet dark light")
@@ -70,11 +71,17 @@ class Link:
             t = threading.Thread(target=self._reader, daemon=True)
         t.start()
 
+    def set_observer(self, fn):
+        """Observe MCU events and outgoing commands for the dashboard."""
+        self.observer = fn
+
     def _stdin_reader(self):
         for line in sys.stdin:
             w = line.strip().lower()
             if w:
                 self.events.put(w)
+                if self.observer:
+                    self.observer("event", w)
 
     def _reader(self):
         buf = b""
@@ -86,6 +93,8 @@ class Link:
                     msg = json.loads(line.decode(errors="ignore").strip())
                     if "e" in msg:
                         self.events.put(msg["e"])
+                        if self.observer:
+                            self.observer("event", msg["e"])
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     pass  # boot noise / partial lines
 
@@ -115,6 +124,8 @@ class Link:
                             msg = json.loads(line.decode(errors="ignore").strip())
                             if "e" in msg:
                                 self.events.put(msg["e"])
+                                if self.observer:
+                                    self.observer("event", msg["e"])
                         except (json.JSONDecodeError, UnicodeDecodeError):
                             pass
             except OSError as e:
@@ -128,6 +139,8 @@ class Link:
     def send(self, cmd: str, val: str = ""):
         if MOCK:
             print(f"[MCU] {cmd}={val}")
+            if self.observer:
+                self.observer(cmd, val)
             return
         payload = {"c": cmd}
         if val:
@@ -141,9 +154,11 @@ class Link:
             try:
                 sock.sendall(line)
             except OSError:
-                pass  # _tcp_loop notices on its next recv() and reconnects
+                return  # _tcp_loop notices on its next recv() and reconnects
         else:
             self.ser.write(line)
+        if self.observer:
+            self.observer(cmd, val)
 
     def mood(self, m):        self.send("mood", m)
     def text(self, t):        self.send("text", t[:21])

@@ -15,6 +15,7 @@ import json
 import os
 import queue
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -29,6 +30,60 @@ _pending = {"q": None, "answer": None}
 _lock = threading.Lock()
 _whapi_stats = {"received": 0, "processed": 0, "last_event": None}
 _frame_fn = None       # set by brain: () -> latest camera jpeg bytes
+_started_at = time.time()
+_runtime = {"camera": False, "robot": False}
+_hardware = {
+    "mood": "idle", "text": "", "face": "", "beep": "",
+    "text_until": 0, "beep_until": 0,
+    "last_action": "waiting for robot", "updated_at": 0,
+}
+
+
+def update_runtime(**values):
+    """Publish non-secret health signals for the local dashboard."""
+    with _lock:
+        _runtime.update(values)
+
+
+def record_hardware(kind: str, value: str):
+    """Track what the MCU should currently be showing or doing."""
+    event_moods = {
+        "pickup": "surprised", "shake": "dizzy", "tap": "happy",
+        "talk": "curious", "pet": "love", "dark": "sleepy",
+        "light": "surprised",
+    }
+    with _lock:
+        if kind == "event":
+            _hardware["mood"] = event_moods.get(value, _hardware["mood"])
+            _hardware["last_action"] = f"MCU event · {value}"
+        else:
+            _hardware[kind] = value
+            _hardware["last_action"] = f"{kind} · {value}"
+            if kind == "mood":
+                _hardware["face"] = ""
+            elif kind == "text":
+                _hardware["text_until"] = time.time() + 6
+            elif kind == "beep":
+                _hardware["beep_until"] = time.time() + 2
+        _hardware["updated_at"] = time.time()
+
+
+def service_status() -> dict:
+    with _lock:
+        runtime = dict(_runtime)
+        whapi = dict(_whapi_stats)
+        hardware = dict(_hardware)
+    return {
+        "ok": True,
+        "uptime_seconds": int(time.time() - _started_at),
+        "runtime": runtime,
+        "hardware": hardware,
+        "openai": bool(os.environ.get("OPENAI_API_KEY")),
+        "audio": os.environ.get("AUDIO_OUT", "beeps"),
+        "bridge": bool(os.environ.get("BRIDGE_URL")),
+        "swiggy": swiggy_tool.auth_status(),
+        "whapi": whapi,
+    }
 
 
 def set_frame_source(fn):
@@ -237,6 +292,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
             except Exception as exc:
                 self._json(400, {"ok": False, "error": str(exc)})
+        elif path == "/status":
+            self._json(200, service_status())
         elif path == "/swiggy/status":
             self._json(200, {"ok": True, **swiggy_tool.auth_status()})
         elif path == "/answer":

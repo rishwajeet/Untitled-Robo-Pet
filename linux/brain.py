@@ -16,6 +16,7 @@ import cv2
 
 import journal
 import senses
+import dashboard
 import server
 import tools_local
 import voice
@@ -181,6 +182,12 @@ def main():
 
     agent_events = queue.Queue()
     server.start(agent_events)
+    try:
+        dashboard.start()
+    except OSError as exc:
+        print(f"Dashboard unavailable on :{dashboard.PORT}: {exc}")
+    link.set_observer(server.record_hardware)
+    server.update_runtime(robot=True, camera=cap.isOpened())
     tools_local.set_frame_source(lambda: grab_jpeg(cap))
     server.set_frame_source(senses.get_latest_jpeg)
     link.send("reinit")  # recover the OLED if a reflash/power blip wedged it
@@ -189,6 +196,7 @@ def main():
     link.text("BITTU ONLINE")
     journal.log("system", "Bittu online")
     print("Bittu online. Ctrl-C to stop.")
+    print(f"Dashboard: http://localhost:{dashboard.PORT}")
 
     present = False
     last_seen = 0.0
