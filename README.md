@@ -1,0 +1,139 @@
+# BITTU — desk robot with senses (Buildathon, Desk 21)
+
+**Face assets ready** (`assets/faces/`): 128x32 1-bit bitmaps +
+`pet_faces.h`, Adafruit_GFX-compatible. To use them in
+`mcu/robot_body/robot_body.ino`: copy `pet_faces.h` next to the sketch,
+`#include` it, and in `drawEyes()` replace the procedural drawing with
+`oled.drawBitmap(0, 0, PET_FACE_<STATE>, 128, 32, 1)` per mood
+(error→angry, waiting→curious; keep procedural dizzy/love — no bitmap yet).
+The `claude_*` faces map to agent mode: permission→agent_ask,
+tool_running→agent_working, done→agent_done. Keep the blink frame timing.
+
+Sees (C270) · Hears (C270 mic) · **Feels** (Modulino movement) · Reacts (OLED
+eyes + LED moods + beeps/voice). MCU has local reflexes (instant), Linux brain
+adds wit (cloud). If WiFi dies mid-demo, the robot STILL reacts — reflexes are
+on the MCU.
+
+## Deploy (fastest path)
+
+1. **MCU first** — flash `mcu/robot_body/robot_body.ino` via Hydron.
+   Libraries: `Adafruit SSD1306`, `Adafruit GFX`, `Modulino`.
+   This alone = eyes + blink + touch reactions + beeps. Milestone 1 done.
+2. **Linux side** — copy `linux/` onto the UNO Q (scp or Hydron), then:
+   `pip install -r requirements.txt`
+   Full run (all optional except the first two):
+   ```
+   OPENAI_API_KEY=sk-...            \
+   ROBOT_PORT=/dev/ttyACM0          \
+   AUDIO_OUT=c6 C6_IP=<glyph-ip>    \  # or beeps / bt
+   BRIDGE_URL=http://<laptop>:8400  \  # two-way Claude Code bridge
+   SWIGGY_TOKEN=<token>             \  # food powers
+   SASS=7 python3 brain.py
+   ```
+   Find the port: `ls /dev/tty*` before/after — or ask Hydron to wire
+   `transport.py` to the UNO Q's Linux↔MCU serial bridge (only file that
+   may need adapting).
+
+## Wiring (breadboard)
+
+| Part | Hookup |
+|---|---|
+| OLED 0.91" | VCC→3.3V, GND, SDA→A4, SCL→A5 (I2C addr 0x3C) |
+| Modulino Movement | Qwiic cable → Qwiic port. Done. |
+| Speaker | D9 → pot outer leg; pot **wiper** → speaker+; speaker− → GND. Pot = volume knob. Never bypass the pot (pin current). |
+| Talk button | D2 → button → GND |
+| Pet button | D3 → button → GND |
+| Red LEDs | D5, D6 → long leg (through ~220Ω if any at help desk; else keep PWM low) |
+| Blue LEDs | D10, D11 → same |
+| LDR | 3.3V → LDR → A0, and A0 → 10K→ GND (no 10K? ask help desk; else skip LDR) |
+
+## Heartbeat + journal — the aliveness engine
+
+Bittu wakes every 30-90s (jittered), looks through the camera, reads his own
+recent journal, and decides if anything is worth doing. Usually: nothing.
+Occasionally: one line about what changed. All interactions — heard/said,
+touches, tools, agent events, guard alerts — live in ONE journal
+(`~/bittu-journal.jsonl` on the Q), so companion-mode and agent-mode are one
+continuous being. `tail -f` it at the demo table — judges love seeing the
+inner life scroll by.
+
+Tools he can use by voice: weather, lookup (Wikipedia), time, rock-paper-
+scissors vs the camera, guard mode ("guard my desk" → motion = alert + photo
+of intruder), Swiggy, and the Claude Code bridge below.
+
+## Two-way Claude Code bridge (talk to your coding session through him)
+
+On the Mac: `tmux new -s claude` → run `claude` inside it. Then
+`python3 laptop/bridge.py` (listens :8400). On the Q:
+`export BRIDGE_URL=http://<laptop-ip>:8400`.
+Now: "Bittu, tell claude to fix the tests" → prompt lands in the live
+session. "Stop him" → Escape. Status flows back via hooks (below), and he
+narrates it. Prompt in by voice, approve by button, result spoken back —
+the robot IS the terminal.
+
+## Mode 2 — agent peripheral (Claude Code drives the body)
+
+`brain.py` now runs an HTTP server on **:8300**. Claude Code hooks curl it:
+agent starts → curious eyes; working → status on OLED; done → happy + beep +
+one smug spoken line; error → angry + red LEDs. And the killer beat:
+`hooks/approve.sh` as a PreToolUse hook makes Claude **ask the robot for
+permission** — talk button = allow, pet button = DENIED.
+
+Setup: get the board's IP (`hostname -I`), replace ROBOT in
+`hooks/settings-snippet.json`, merge into the demo project's
+`.claude/settings.json` on the laptop. Test with:
+`curl -X POST http://<ip>:8300/event -d '{"e":"agent_done","text":"tests pass"}'`
+
+**Network trap: venue WiFi often has client isolation (laptop can't reach
+board). Test the curl EARLY. If blocked → phone hotspot with laptop + board
+both on it. Decide this before 3pm, not at 4:45.**
+
+## Audio — Glyph C6 is the voice box (organizer-confirmed)
+
+Flash `mcu/glyph_audio/glyph_audio.ino` on the Glyph C6 (board: "ESP32C6 Dev
+Module", set hotspot SSID/PASS + speaker pins in the sketch — **ask help desk
+which pins the speaker module uses and whether it's I2S or analog**). It
+prints its IP on boot. On the Q: `C6_IP=<that ip> AUDIO_OUT=c6` and Bittu
+speaks — TTS wav streams from the Q to the C6 over TCP :8301, out via I2S.
+Fallbacks unchanged: `AUDIO_OUT=bt` (BT/USB speaker + aplay) or
+`AUDIO_OUT=beeps` (R2-D2 mode: beeps + words on OLED — still charming).
+
+## Swiggy MCP — Bittu orders real food (stretch, but REAL)
+
+Swiggy has an official MCP server (food / Instamart / dineout), OAuth via
+phone+OTP, **COD orders** — no payment code. Wired into the talk path:
+say "order a chai to desk 21" → agent loop → real order.
+
+1. On the laptop: `npx mcp-remote https://mcp.swiggy.com/food` → browser →
+   phone + OTP. Token lands in `~/.mcp-auth/` — grep for `access_token`.
+2. On the Q: `export SWIGGY_TOKEN=<token>` before running brain.py.
+3. Test in isolation first: `python3 -c "import swiggy_tool;
+   print(swiggy_tool.openai_tools()[:2])"` — if tools list, you're live.
+Showmanship: place the real order ~4:40 so delivery lands DURING judging.
+Do the OTP dance late afternoon (token freshness unknown). Instamart
+(`SWIGGY_MCP=https://mcp.swiggy.com/im`) delivers in ~10 min — better for
+demo timing than restaurant food.
+
+## Demo script (rehearse 3x after 3:30)
+
+1. Judge approaches → Bittu spots them, greets with an observation about them.
+2. "Pick him up." → protest. 3. "Now shake him." → dizzy meltdown.
+4. Pet/tap → forgives, hearts. 5. Hold TALK, ask him anything → sassy answer
+   referencing what he sees. 6. MODE SWITCH: "he also has a job" — fire a
+   Claude Code task on the laptop → Bittu tracks it, celebrates the finish,
+   then Claude asks HIM for permission and a judge gets to press DENY.
+Kill switch reality: what works at 4:30 is the demo — cut features, not sleep.
+
+## Clock
+
+- Before lunch: eyes on OLED + Modulino events printing (flash MCU alone).
+- 2:00: serial link up, camera greet loop.  3:00: FULL LOOP demoable, ugly.
+- 3:00 surprise: budget 30 min, architecture is modular — new input = one
+  event name, new output = one command.
+- 3:30–4:30: personality tuning (SASS env var + system prompt in voice.py),
+  demo rehearsal. NOT new features.
+
+## Name
+
+He's BITTU (boot screen in the .ino, personality in voice.py). Change both
+if the team hates it — but pick a name; judges remember names.

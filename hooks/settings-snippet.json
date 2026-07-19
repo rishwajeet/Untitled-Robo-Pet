@@ -1,0 +1,48 @@
+{
+  "//": "Merge into .claude/settings.json of the DEMO project on the laptop.",
+  "//2": "Replace ROBOT with the UNO Q's IP (hostname -I on the board).",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 2 -X POST http://ROBOT:8300/event -d '{\"e\":\"agent_start\",\"text\":\"claude: on it\"}' >/dev/null &"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 2 -X POST http://ROBOT:8300/event -d '{\"e\":\"agent_working\",\"text\":\"claude is building\"}' >/dev/null &"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 2 -X POST http://ROBOT:8300/event -d '{\"e\":\"agent_done\",\"text\":\"task finished\"}' >/dev/null &"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/PATH/TO/buildathon-robot/hooks/approve.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
